@@ -280,7 +280,7 @@ def _do_train_eval_balanced_v2(model_obj,
     tpr = list()
     th = list()
     rocauc = list()
-    for drop in range(3):
+    for drop in range(4):
         if drop == 0:
             x_dropped = x_test
         else:
