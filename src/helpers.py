@@ -208,7 +208,7 @@ def ttime_kfold_cross_validation_v2(model_obj,
     scores_path = os.path.join(results_dir, scores_filename)
     if os.path.exists(scores_path):
         print('Final scores already exists.')
-        final_scores = np.load(scores_path)
+        final_scores = np.load(scores_path, allow_pickle=True)
         return final_scores
 
     file_names = ['{}-{}-time{}-fold{}-cv.npy'.format(model_name,
