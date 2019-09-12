@@ -74,7 +74,7 @@ class DeepEEGAbstractor(KerasModel):
                  channels=20,
                  model_name='deep_eeg_abstractor',
                  lightweight=False,
-                 units=(8, 8, 8),
+                 units=(6, 8, 6),
                  dropout_rate=0.1,
                  pool_size=2,
                  models_dir='./models',
@@ -112,7 +112,7 @@ class DeepEEGAbstractor(KerasModel):
                           x_embed=None,
                           y_embed=None,
                           metadata=None,
-                          run_prefix='eegnet'):
+                          run_prefix='deega'):
         assert self.model_ is not None, "Create or load model first."
 
         # dt = datetime.now().strftime('%Y%m%d-%H%M%S')
