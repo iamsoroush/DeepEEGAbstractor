@@ -10,7 +10,7 @@ from sklearn.model_selection import StratifiedKFold
 from sklearn.metrics import roc_curve, auc
 import tensorflow as tf
 import matplotlib.pyplot as plt
-plt.style.use('seaborn-darkgrid')
+# plt.style.use('seaborn-darkgrid')
 
 if tf.__version__.startswith('2'):
     from tensorflow import keras
