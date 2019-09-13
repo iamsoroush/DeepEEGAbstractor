@@ -297,6 +297,99 @@ def _do_train_eval_balanced_v2(model_obj,
     return np.array([scores, fpr, tpr, th, rocauc])
 
 
+def ttime_kfold_cross_validation_v3(model_obj,
+                                    data,
+                                    labels,
+                                    train_indices,
+                                    test_indices,
+                                    train_generator,
+                                    test_generator,
+                                    t,
+                                    k,
+                                    epochs,
+                                    results_dir,
+                                    task,
+                                    instance_duration):
+    # train_indices: [[t1_k1_ind, t1_k2_ind, ...], [t2_k1_ind, ...], ...]
+    model_name = model_obj.model_name_
+    scores_filename = '{}-{}-{}t-{}k-{}-duration{}.npy'.format(model_name,
+                                                               task,
+                                                               t,
+                                                               k,
+                                                               'cross_subject',
+                                                               instance_duration)
+    scores_path = os.path.join(results_dir, scores_filename)
+    if os.path.exists(scores_path):
+        print('Final scores already exists.')
+        final_scores = np.load(scores_path, allow_pickle=True)
+        return final_scores
+
+    file_names = ['{}-{}-time{}-fold{}-cv.npy'.format(model_name,
+                                                      task,
+                                                      i + 1,
+                                                      j + 1) for i in range(t) for j in range(k)]
+    file_paths = [os.path.join(results_dir, file_name) for file_name in file_names]
+    dir_file_names = os.listdir(results_dir)
+    for i in range(t):
+        print('time {}:'.format(i + 1))
+        for j in range(k):
+            print(' step {}/{} ...'.format(j + 1, k))
+            ind = int(i * t + j)
+            file_name = file_names[ind]
+            file_path = file_paths[ind]
+            if file_name not in dir_file_names:
+                train_ind = train_indices[i][j]
+                test_ind = test_indices[i][j]
+                scores = _do_train_eval_v3(model_obj,
+                                           data,
+                                           labels,
+                                           train_ind,
+                                           test_ind,
+                                           train_generator,
+                                           test_generator,
+                                           epochs)
+                np.save(file_path, scores)
+
+    final_scores = list()
+    for file_path in file_paths:
+        final_scores.append(np.load(file_path, allow_pickle=True))
+    final_scores = np.array(final_scores).reshape((t, k, final_scores[0].shape[0]))
+    np.save(scores_path, final_scores)
+    for file_path in file_paths:
+        os.remove(file_path)
+    return final_scores
+
+
+def _do_train_eval_v3(model_obj,
+                      data,
+                      labels,
+                      train_ind,
+                      test_ind,
+                      train_generator,
+                      test_generator,
+                      epochs):
+    loss = model_obj.loss
+    optimizer = model_obj.optimizer
+    metrics = model_obj.metrics
+
+    train_data = [data[j] for j in train_ind]
+    train_labels = [labels[j] for j in train_ind]
+    test_data = [data[j] for j in test_ind]
+    test_labels = [labels[j] for j in test_ind]
+    train_gen, n_iter_train = train_generator.get_generator(train_data, train_labels)
+    test_gen, n_iter_test = test_generator.get_generator(test_data, test_labels)
+
+    model = model_obj.create_model()
+    model.compile(loss=loss, optimizer=optimizer, metrics=metrics)
+
+    model.fit_generator(generator=train_gen,
+                        steps_per_epoch=n_iter_train,
+                        epochs=epochs,
+                        verbose=False)
+    scores = model.evaluate_generator(test_gen, steps=n_iter_test, verbose=False)
+    return scores
+
+
 def drop_channels(arr, drop=2):
     n_samples, n_times, n_channels = arr.shape
     to_drop = np.random.randint(low=0, high=n_channels, size=(n_samples, drop))
