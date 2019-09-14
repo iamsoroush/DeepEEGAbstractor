@@ -270,7 +270,7 @@ class DeepEEGAbstractor(BaseModel):
                  input_shape,
                  model_name='deep_eeg_abstractor',
                  lightweight=False,
-                 units=(8, 8, 8),
+                 units=(6, 8, 6),
                  dropout_rate=0.1,
                  pool_size=2,
                  use_bias=True,
