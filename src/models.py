@@ -26,11 +26,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.manifold import TSNE
 
-from .custom_layers import InstanceNorm,\
-    InstanceNormalization,\
-    AttentionWithContext,\
-    Attention,\
-    TemporalAttention
+from .custom_layers import InstanceNorm, TemporalAttention
 from .helpers import f1_score, sensitivity, specificity
 
 import tensorflow as tf
@@ -148,15 +144,19 @@ class ESTCNNModel(BaseModel):
 
     def create_model(self):
         input_tensor = keras.layers.Input(shape=self.input_shape_)
+        input1 = keras.layers.Permute((2, 1))(input_tensor)
+        input1 = keras.layers.Lambda(keras.backend.expand_dims,
+                                     arguments={'axis': -1},
+                                     name='estcnn_input')(input1)
 
-        x = self.core_block(input_tensor, 16)
-        x = keras.layers.MaxPooling1D(2, strides=2)(x)
+        x = self.core_block(input1, 16)
+        x = keras.layers.MaxPooling2D((1, 2), strides=2)(x)
 
         x = self.core_block(x, 32)
-        x = keras.layers.MaxPooling1D(2, strides=2)(x)
+        x = keras.layers.MaxPooling2D((1, 2), strides=2)(x)
 
         x = self.core_block(x, 64)
-        x = keras.layers.AveragePooling1D(7, strides=7)(x)
+        x = keras.layers.AveragePooling2D((1, 7), strides=7)(x)
 
         x = keras.layers.Flatten()(x)
 
@@ -169,21 +169,21 @@ class ESTCNNModel(BaseModel):
         return model
 
     @staticmethod
-    def core_block(x, n_units=16):
-        out = keras.layers.Conv1D(filters=n_units,
-                                  kernel_size=3,
+    def core_block(x, n_units):
+        out = keras.layers.Conv2D(filters=n_units,
+                                  kernel_size=(1, 3),
                                   padding='valid',
                                   kernel_initializer='glorot_normal',
                                   activation='relu')(x)
         out = keras.layers.BatchNormalization()(out)
-        out = keras.layers.Conv1D(filters=n_units,
-                                  kernel_size=3,
+        out = keras.layers.Conv2D(filters=n_units,
+                                  kernel_size=(1, 3),
                                   padding='valid',
                                   kernel_initializer='glorot_normal',
                                   activation='relu')(out)
         out = keras.layers.BatchNormalization()(out)
-        out = keras.layers.Conv1D(filters=n_units,
-                                  kernel_size=3,
+        out = keras.layers.Conv2D(filters=n_units,
+                                  kernel_size=(1, 3),
                                   padding='valid',
                                   kernel_initializer='glorot_normal',
                                   activation='relu')(out)
@@ -229,34 +229,43 @@ class EEGNet(BaseModel):
         samples, channels = self.input_shape_
         input_tensor = keras.layers.Input(shape=self.input_shape_)
         input1 = keras.layers.Permute((2, 1))(input_tensor)
-        input1 = keras.layers.Lambda(keras.backend.expand_dims, arguments={'axis': -1}, name='eegnet_standard_input')(
-            input1)
+        input1 = keras.layers.Lambda(keras.backend.expand_dims,
+                                     arguments={'axis': -1},
+                                     name='eegnet_standard_input')(input1)
 
-        block1 = keras.layers.Conv2D(self.f1, (1, 2 * self.kernel_length), padding='same',
+        block1 = keras.layers.Conv2D(self.f1,
+                                     (1, 2 * self.kernel_length),
+                                     padding='same',
                                      use_bias=False)(input1)
         block1 = keras.layers.BatchNormalization(axis=-1)(block1)
-        block1 = keras.layers.DepthwiseConv2D((channels, 1), use_bias=False,
+        block1 = keras.layers.DepthwiseConv2D((channels, 1),
+                                              use_bias=False,
                                               depth_multiplier=self.d,
                                               depthwise_constraint=keras.constraints.max_norm(1.))(block1)
         block1 = keras.layers.BatchNormalization(axis=-1)(block1)
-        block1 = keras.layers.Activation('elu')(block1)
+        block1 = keras.layers.Activation('relu')(block1)
         block1 = keras.layers.AveragePooling2D((1, 2 * 4))(block1)
         block1 = keras.layers.Dropout(self.dropout_rate)(block1)
 
-        block2 = keras.layers.SeparableConv2D(self.f2, (1, 2 * 16),
-                                              use_bias=False, padding='same')(block1)
+        block2 = keras.layers.SeparableConv2D(self.f2,
+                                              (1, 2 * 16),
+                                              use_bias=False,
+                                              padding='same')(block1)
         block2 = keras.layers.BatchNormalization(axis=-1)(block2)
-        block2 = keras.layers.Activation('elu')(block2)
+        block2 = keras.layers.Activation('relu')(block2)
         block2 = keras.layers.AveragePooling2D((1, 2 * 8))(block2)
         block2 = keras.layers.Dropout(self.dropout_rate)(block2)
 
         flatten = keras.layers.Flatten(name='flatten')(block2)
 
-        dense = keras.layers.Dense(1, name='dense',
+        dense = keras.layers.Dense(1,
+                                   name='dense',
                                    kernel_constraint=keras.constraints.max_norm(self.norm_rate))(flatten)
-        softmax = keras.layers.Activation('sigmoid', name='softmax')(dense)
+        output = keras.layers.Activation('sigmoid',
+                                         name='output')(dense)
 
-        model = keras.Model(inputs=input_tensor, outputs=softmax)
+        model = keras.Model(inputs=input_tensor,
+                            outputs=output)
         self.model_ = model
 
         return model
