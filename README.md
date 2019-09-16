@@ -12,7 +12,25 @@ Do the following:
 
 
 # Results
-## Embeddings Visualization
+## Overall Performance
+### Responder vs. Non Responder: Balanced dataset (5time-kfold CV)
+
+...
+
+### Responder vs. Non Responder: Cross-subject generalisation (10time-10fold CV)
+
+...
+
+### Healthy vs. MDD: Balanced dataset (5time-5fold CV)
+
+...
+
+### Healthy vs. MDD: Cross-subject generalisation (5time-5fold CV)
+
+...
+
+
+## Embeddings Visualization: Fixed len test set [4s]
 ### After 2 epochs
 ![Alt text](https://github.com/iamsoroush/DeepEEGAbstractor/blob/master/results/rnr-2epochs-balanced-fixed4s.gif)
 
@@ -24,3 +42,16 @@ Do the following:
 
 ### After 50 epochs
 ![Alt text](https://github.com/iamsoroush/DeepEEGAbstractor/blob/master/results/rnr-50epochs-balanced-fixed4s.gif)
+
+## Embeddings Visualization: Variable length test set [4s, 10s]
+### After 2 epochs
+![Alt text]()
+
+### After 5 epochs
+![Alt text]()
+
+### After 10 epochs
+![Alt text]()
+
+### After 50 epochs
+![Alt text]()
