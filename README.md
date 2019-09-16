@@ -9,3 +9,8 @@ Do the following:
 3. Open a notebook from _notebooks_ folder in google colab.
 4. Run the notebook cell-by-cell
 5. And now you have the results!
+
+
+# Results
+## Embeddings Visualization
+![Alt text](https://github.com/iamsoroush/DeepEEGAbstractor/blob/master/results/rnr-2epochs-balanced-fixed4s.gif)
