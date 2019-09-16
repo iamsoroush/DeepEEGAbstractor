@@ -44,14 +44,14 @@ Do the following:
 ![Alt text](https://github.com/iamsoroush/DeepEEGAbstractor/blob/master/results/rnr-50epochs-balanced-fixed4s.gif)
 
 ## Embeddings Visualization: Variable length test set [4s, 10s]
-### After 2 epochs
-![Alt text]()
+### After 1 epochs
+![Alt text](https://github.com/iamsoroush/DeepEEGAbstractor/blob/master/results/varlen-epoch1.gif)
 
 ### After 5 epochs
-![Alt text]()
+![Alt text](https://github.com/iamsoroush/DeepEEGAbstractor/blob/master/results/varlen-epoch5.gif)
 
 ### After 10 epochs
-![Alt text]()
+![Alt text](https://github.com/iamsoroush/DeepEEGAbstractor/blob/master/results/varlen-epoch10.gif)
 
-### After 50 epochs
-![Alt text]()
+### After 40 epochs
+![Alt text](https://github.com/iamsoroush/DeepEEGAbstractor/blob/master/results/varlen-epoch40.gif)
