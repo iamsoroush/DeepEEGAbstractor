@@ -13,4 +13,14 @@ Do the following:
 
 # Results
 ## Embeddings Visualization
+### After 2 epochs
 ![Alt text](https://github.com/iamsoroush/DeepEEGAbstractor/blob/master/results/rnr-2epochs-balanced-fixed4s.gif)
+
+### After 5 epochs
+![Alt text](https://github.com/iamsoroush/DeepEEGAbstractor/blob/master/results/rnr-5epochs-balanced-fixed4s.gif)
+
+### After 10 epochs
+![Alt text](https://github.com/iamsoroush/DeepEEGAbstractor/blob/master/results/rnr-10epochs-balanced-fixed4s.gif)
+
+### After 50 epochs
+![Alt text](https://github.com/iamsoroush/DeepEEGAbstractor/blob/master/results/rnr-50epochs-balanced-fixed4s.gif)
