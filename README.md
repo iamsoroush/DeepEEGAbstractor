@@ -1,4 +1,4 @@
-# DeepEEGAbstractor
+# Deep EEG Abstractor (D-EEG-A)
 
 Do the following:
 1. Download dataset from [here](https://figshare.com/articles/EEG_Data_New/4244171).
@@ -50,3 +50,6 @@ Do the following:
 
 #### After 40 epochs
 ![Alt text](https://github.com/iamsoroush/DeepEEGAbstractor/blob/master/results/varlen-epoch40.gif)
+
+#### Distribution of data instance length after 40 epochs
+![Alt text](https://github.com/iamsoroush/DeepEEGAbstractor/blob/master/results/durations-epoch50.gif)
