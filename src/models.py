@@ -106,6 +106,10 @@ class Conv2DModel(BaseModel):
 
     def __init__(self, input_shape, model_name='conv2d'):
         super().__init__(input_shape, model_name)
+        self.optimizer = keras.optimizers.SGD(lr=0.01,
+                                              momentum=0.9,
+                                              decay=1e-4,
+                                              nesterov=True)
         if keras.backend.image_data_format() != 'channels_last':
             keras.backend.set_image_data_format('channels_last')
 
