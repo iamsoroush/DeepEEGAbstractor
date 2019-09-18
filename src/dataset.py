@@ -212,24 +212,58 @@ class Splitter:
 
 class DataLoader:
 
-    def __init__(self, data_dir, task):
+    def __init__(self,
+                 data_dir,
+                 task,
+                 data_mode='cross_subject',
+                 sampling_rate=256,
+                 instance_duration=None,
+                 instance_overlap=None):
         self.data_dir = data_dir
         self.task = task
+        self.data_mode = data_mode
+        self.sampling_rate = sampling_rate
+        self.instance_duration = instance_duration
+        self.instance_overlap = instance_overlap
 
     def load_data(self):
-        data_files, raw_labels = self._correct_data()
+        if self.data_mode == 'balanced':
+            assert isinstance(self.instance_duration, int) and isinstance(self.instance_overlap, int),\
+                "make sure to et instance_duration and instance_overlap arguments."
+            data_files, raw_labels = self._correct_data()
 
-        data = list()
-        labels = list()
+            data = list()
+            labels = list()
 
-        print('\nLoading data to memory ...\n')
-        with tqdm(total=len(data_files)) as pbar:
-            for label, file_name in zip(raw_labels, data_files):
-                file_path = os.path.join(self.data_dir, file_name)
-                arr = np.load(file_path)
-                data.append(arr.T)
-                labels.append(label)
-                pbar.update(1)
+            print('\nLoading data ...\n')
+            with tqdm(total=len(data_files)) as pbar:
+                for label, file_name in zip(raw_labels, data_files):
+                    file_path = os.path.join(self.data_dir, file_name)
+                    arr = np.load(file_path)
+                    instances = self._generate_instances(arr)
+                    data.extend(instances)
+                    labels.extend([label] * len(instances))
+                    pbar.update(1)
+
+            data = np.array(data)
+            labels = np.array(labels)
+
+        elif self.data_mode == 'cross_subject':
+            data_files, raw_labels = self._correct_data()
+
+            data = list()
+            labels = list()
+
+            print('\nLoading data ...\n')
+            with tqdm(total=len(data_files)) as pbar:
+                for label, file_name in zip(raw_labels, data_files):
+                    file_path = os.path.join(self.data_dir, file_name)
+                    arr = np.load(file_path)
+                    data.append(arr.T)
+                    labels.append(label)
+                    pbar.update(1)
+        else:
+            raise Exception('Data mode must be "balanced" or "cross_subject".')
         return data, labels
 
     def _correct_data(self):
@@ -243,6 +277,23 @@ class DataLoader:
             labels = [l for l in labels if l > -1]
 
         return data_files, labels
+
+    def _generate_instances(self, arr):
+        sample_time_steps = self.instance_duration * self.sampling_rate
+        overlap_time_steps = self.instance_overlap * self.sampling_rate
+        start_steps = sample_time_steps - overlap_time_steps
+
+        start_indices = np.array([i for i in range(0, arr.shape[1] - sample_time_steps, start_steps)])
+        end_indices = start_indices + sample_time_steps
+        indices = list(zip(start_indices, end_indices))
+
+        channels = arr.shape[0]
+        instances = np.zeros((len(indices), sample_time_steps, channels))
+        for ind, (i, j) in enumerate(indices):
+            instance = arr[:, i: j]
+            instance = (instance - instance.mean()) / instance.std()
+            instances[ind, :, :] = instance.T
+        return instances
 
     @staticmethod
     def _label_map(file_name):
