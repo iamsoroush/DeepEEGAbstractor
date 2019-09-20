@@ -275,6 +275,95 @@ class EEGNet(BaseModel):
         return model
 
 
+class TIResEEGNet(BaseModel):
+    """Temporal-inception with residual connections EEGNet."""
+
+    def __init__(self,
+                 input_shape,
+                 model_name='tires_eegnet',
+                 dropout_rate=0.5,
+                 sampling_rate=256,
+                 n_ti_base_unit=8,
+                 depth_multiplier=2,
+                 n_sepconv=16,
+                 norm_rate=0.25):
+        super().__init__(input_shape, model_name)
+        self.dropout_rate = dropout_rate
+        self.sampling_rate = sampling_rate
+        self.n_ti_base_unit = n_ti_base_unit
+        self.depth_multiplier = depth_multiplier
+        self.n_sepconv = n_sepconv
+        self.norm_rate = norm_rate
+        if keras.backend.image_data_format() != 'channels_last':
+            keras.backend.set_image_data_format('channels_last')
+
+    def create_model(self):
+        samples, channels = self.input_shape_
+        input_tensor = keras.layers.Input(shape=self.input_shape_)
+        input1 = keras.layers.Permute((2, 1))(input_tensor)
+        input1 = keras.layers.Lambda(keras.backend.expand_dims,
+                                     arguments={'axis': -1},
+                                     name='eegnet_standard_input')(input1)
+
+        block1 = self._temporal_inception_block(input1)
+        block1 = keras.layers.DepthwiseConv2D((channels, 1),
+                                              use_bias=False,
+                                              depth_multiplier=self.depth_multiplier,
+                                              depthwise_constraint=keras.constraints.max_norm(1.))(block1)
+        block1 = keras.layers.BatchNormalization(axis=-1)(block1)
+        block1 = keras.layers.Activation('relu')(block1)
+        block1 = keras.layers.AveragePooling2D((1, self.sampling_rate // 64))(block1)
+        block1 = keras.layers.Dropout(self.dropout_rate)(block1)
+
+        block2 = keras.layers.SeparableConv2D(self.n_sepconv,
+                                              (1, self.sampling_rate // 16),
+                                              use_bias=False,
+                                              padding='same')(block1)
+        block2 = keras.layers.BatchNormalization(axis=-1)(block2)
+        block2 = keras.layers.Activation('relu')(block2)
+        block2 = keras.layers.AveragePooling2D((1, self.sampling_rate // 64))(block2)
+        block2 = keras.layers.Dropout(self.dropout_rate)(block2)
+
+        flatten = keras.layers.Flatten(name='flatten')(block2)
+
+        dense = keras.layers.Dense(1,
+                                   name='dense',
+                                   kernel_constraint=keras.constraints.max_norm(self.norm_rate))(flatten)
+        output = keras.layers.Activation('sigmoid',
+                                         name='output')(dense)
+
+        model = keras.Model(inputs=input_tensor,
+                            outputs=output)
+        self.model_ = model
+
+        return model
+
+    def _temporal_inception_block(self, input_tensor):
+        branch_a = keras.layers.Conv2D(self.n_ti_base_unit,
+                                       (1, self.sampling_rate // 2),
+                                       padding='same',
+                                       use_bias=False)(input_tensor)
+        branch_a = keras.layers.BatchNormalization(axis=-1)(branch_a)
+        branch_a = keras.layers.Activation('relu')(branch_a)
+
+        branch_b = keras.layers.Conv2D(self.n_ti_base_unit,
+                                       (1, self.sampling_rate // 4),
+                                       padding='same',
+                                       use_bias=False)(input_tensor)
+        branch_b = keras.layers.BatchNormalization(axis=-1)(branch_b)
+        branch_b = keras.layers.Activation('relu')(branch_b)
+
+        branch_c = keras.layers.Conv2D(self.n_ti_base_unit,
+                                       (1, self.sampling_rate // 8),
+                                       padding='same',
+                                       use_bias=False)(input_tensor)
+        branch_c = keras.layers.BatchNormalization(axis=-1)(branch_c)
+        branch_c = keras.layers.Activation('relu')(branch_c)
+
+        output_tensor = keras.layers.concatenate([branch_a, branch_b, branch_c], axis=-1)
+        return output_tensor
+
+
 class DeepEEGAbstractor(BaseModel):
 
     # TODO: add pruning
