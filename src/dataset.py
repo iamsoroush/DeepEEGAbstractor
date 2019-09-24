@@ -219,6 +219,9 @@ class DataLoader:
                  sampling_rate=256,
                  instance_duration=None,
                  instance_overlap=None):
+        assert task in ('rnr', 'hmdd'), "task must be one of {'rnr', 'hmdd'}"
+        assert data_mode in ('cross_subject', 'balanced'), "data_mode must be one of {'cross_subject', 'balanced'}"
+
         self.data_dir = data_dir
         self.task = task
         self.data_mode = data_mode
@@ -227,6 +230,12 @@ class DataLoader:
         self.instance_overlap = instance_overlap
 
     def load_data(self):
+        """Loads data according to given data_mode.
+
+        Normalizing the data instances isn't applied on this stage. Make sure to normalize the instances when
+         feeding to model, i.e. on data generators.
+        """
+
         if self.data_mode == 'balanced':
             assert isinstance(self.instance_duration, int) and isinstance(self.instance_overlap, int),\
                 "make sure to et instance_duration and instance_overlap arguments."
@@ -248,7 +257,7 @@ class DataLoader:
             data = np.array(data)
             labels = np.array(labels)
 
-        elif self.data_mode == 'cross_subject':
+        else:
             data_files, raw_labels = self._correct_data()
 
             data = list()
@@ -262,8 +271,6 @@ class DataLoader:
                     data.append(arr.T)
                     labels.append(label)
                     pbar.update(1)
-        else:
-            raise Exception('Data mode must be "balanced" or "cross_subject".')
         return data, labels
 
     def _correct_data(self):
@@ -291,7 +298,7 @@ class DataLoader:
         instances = np.zeros((len(indices), sample_time_steps, channels))
         for ind, (i, j) in enumerate(indices):
             instance = arr[:, i: j]
-            instance = (instance - instance.mean()) / instance.std()
+            # instance = (instance - instance.mean()) / instance.std()
             instances[ind, :, :] = instance.T
         return instances
 
@@ -310,19 +317,27 @@ class DataLoader:
 
 class FixedLenGenerator:
 
-    def __init__(self, batch_size=64, duration=4, overlap=1, sampling_rate=256):
+    def __init__(self,
+                 batch_size,
+                 duration,
+                 overlap,
+                 sampling_rate):
         self.batch_size = batch_size
         self.duration = duration
         self.overlap = overlap
         self.sampling_rate = sampling_rate
 
-    def get_generator(self, data, labels, indxs=None):
+    def get_generator(self,
+                      data,
+                      labels,
+                      is_train,
+                      indxs=None):
         if indxs is None:
             x, y = self._generate_data_instances(data, labels)
-            gen = self._generator(x, y)
+            gen = self._generator(x, y, is_train)
             n_iter = len(x) // self.batch_size
         else:
-            gen = self._generator(data, labels, indxs)
+            gen = self._generator(data, labels, is_train, indxs)
             n_iter = len(indxs) // self.batch_size
         return gen, n_iter
 
@@ -352,11 +367,15 @@ class FixedLenGenerator:
         instances = np.zeros((len(indices), sample_time_steps, channels))
         for ind, (i, j) in enumerate(indices):
             instance = arr[i: j, :]
-            instance = (instance - instance.mean()) / instance.std()
+            # instance = (instance - instance.mean()) / instance.std()
             instances[ind, :, :] = instance
         return instances
 
-    def _generator(self, data, labels, indxs=None):
+    def _generator(self,
+                   data,
+                   labels,
+                   is_train,
+                   indxs=None):
         """Yields a batch of data and labels in each iteration."""
 
         if indxs is None:
@@ -367,10 +386,14 @@ class FixedLenGenerator:
         start_indx = start_indx[: -1]
         start_end = list(zip(start_indx, end_indx))
         while True:
-            np.random.shuffle(indxs)
+            if is_train:
+                np.random.shuffle(indxs)
             for s, e in start_end:
                 ind = indxs[s: e]
                 x_batch = data[ind]
+                x_batch = (x_batch - x_batch.mean(axis=(1, 2),
+                                                  keepdims=True)) / x_batch.std(axis=(1, 2),
+                                                                                keepdims=True)
                 y_batch = labels[ind]
                 yield x_batch, y_batch
 
