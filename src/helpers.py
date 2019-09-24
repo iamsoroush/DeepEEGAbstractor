@@ -23,7 +23,7 @@ class CrossValidator:
     def __init__(self,
                  task,
                  data_mode,
-                 results_dir,
+                 main_res_dir,
                  model_name,
                  epochs,
                  train_generator,
@@ -37,7 +37,7 @@ class CrossValidator:
 
         self.task = task
         self.data_mode = data_mode
-        self.results_dir = results_dir
+        self.main_res_dir = main_res_dir
         self.model_name = model_name
         self.epochs = epochs
         self.train_generator = train_generator
@@ -46,48 +46,57 @@ class CrossValidator:
         self.k = k
         self.channel_drop = channel_drop
         self.np_random_state = np_random_state
+        self.cv_dir = None
+        self.indices_path = None
+        self.scores_path = None
+        self.rounds_file_names = None
+        self.rounds_file_paths = None
+        self._initialize()
 
-        if not train_generator.is_fixed:
+    def _initialize(self):
+        if not self.train_generator.is_fixed:
             train_gen_type = 'var'
-            tr_pr_1 = train_generator.min_duration
-            tr_pr_2 = train_generator.max_duration
+            tr_pr_1 = self.train_generator.min_duration
+            tr_pr_2 = self.train_generator.max_duration
         else:
             train_gen_type = 'fixed'
-            tr_pr_1 = train_generator.duration
-            tr_pr_2 = train_generator.overlap
-        if not test_generator.is_fixed:
+            tr_pr_1 = self.train_generator.duration
+            tr_pr_2 = self.train_generator.overlap
+        if not self.test_generator.is_fixed:
             test_gen_type = 'var'
-            te_pr_1 = test_generator.min_duration
-            te_pr_2 = test_generator.max_duration
+            te_pr_1 = self.test_generator.min_duration
+            te_pr_2 = self.test_generator.max_duration
         else:
             test_gen_type = 'fixed'
-            te_pr_1 = test_generator.duration
-            te_pr_2 = test_generator.overlap
+            te_pr_1 = self.test_generator.duration
+            te_pr_2 = self.test_generator.overlap
 
         train_data_prefix = train_gen_type + str(tr_pr_1) + str(tr_pr_2)
         test_data_prefix = test_gen_type + str(te_pr_1) + str(te_pr_2)
 
-        self.cv_dir = os.path.join(results_dir, '{}_{}'.format(data_mode, task))
+        self.cv_dir = os.path.join(self.main_res_dir, '{}_{}'.format(self.data_mode, self.task))
         if not os.path.exists(self.cv_dir):
             os.mkdir(self.cv_dir)
 
-        unique_identifier = '{}time-{}fold-{}epochs-tr_{}-te_{}'.format(t,
-                                                                        k,
-                                                                        epochs,
+        unique_identifier = '{}time-{}fold-{}epochs-tr_{}-te_{}'.format(self.t,
+                                                                        self.k,
+                                                                        self.epochs,
                                                                         train_data_prefix,
                                                                         test_data_prefix)
         indices_filename = 'train_test_indices-{}.pkl'.format(unique_identifier)
         self.indices_path = os.path.join(self.cv_dir, indices_filename)
 
-        scores_filename = '{}-{}.npy'.format(model_name, unique_identifier)
-        self.scores_path = os.path.join(results_dir, scores_filename)
-        self.rounds_file_names = ['{}-time{}-fold{}-{}epochs-tr_{}-te_{}.npy'.format(model_name,
-                                                                                     i + 1,
-                                                                                     j + 1,
-                                                                                     epochs,
-                                                                                     train_data_prefix,
-                                                                                     test_data_prefix) for i in range(t) for j in range(k)]
-        self.rounds_file_paths = [os.path.join(results_dir, file_name) for file_name in self.rounds_file_names]
+        scores_filename = '{}-{}.npy'.format(self.model_name, unique_identifier)
+        self.scores_path = os.path.join(self.cv_dir, scores_filename)
+        template = '{}-time{}-fold{}-{}epochs-tr_{}-te_{}.npy'
+        self.rounds_file_names = [template.format(self.model_name,
+                                                  i + 1,
+                                                  j + 1,
+                                                  self.epochs,
+                                                  train_data_prefix,
+                                                  test_data_prefix) for i in range(self.t) for j in range(self.k)]
+        self.rounds_file_paths = [os.path.join(self.cv_dir, file_name) for file_name in self.rounds_file_names]
+        return
 
     def do_cv(self,
               model_obj,
@@ -180,6 +189,25 @@ class CrossValidator:
         scores = model.evaluate_generator(test_gen,
                                           steps=n_iter_test,
                                           verbose=False)
+        # if self.data_mode == 'cross_subject':
+        #     x_test = list()
+        #     y_test = list()
+        #     for i in range(n_iter_test):
+        #         x_batch, y_batch = next(test_gen)
+        #         x_test.extend(x_batch)
+        #         y_test.extend(y_batch)
+        #     x_test = np.array(x_test)
+        #     y_test = np.array(y_test)
+        #     subject_ids = np.array(test_gen.belonged_to_subject[: len(y_test)])
+        #     y_subjects = list()
+        #     y_preds = list()
+        #     for s_id in np.unique(subject_ids):
+        #         indx = np.where(subject_ids == s_id)[0]
+        #         x_subject = x_test[indx]
+        #         y_subjects.append(int(y_test[indx][0]))
+        #         y_pred_proba = model.predict(x_subject).mean()
+        #         y_preds.append(int(np.where(y_pred_proba > 0.5, 1, 0)))
+
         if self.channel_drop:
             scores = [scores]
             scores.extend(self._get_channel_drop_scores(test_gen,
