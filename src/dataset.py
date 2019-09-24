@@ -315,7 +315,22 @@ class DataLoader:
             raise Exception("File label is'nt in (h, r, nr): {}".format(file_name))
 
 
-class FixedLenGenerator:
+class Generator:
+
+    def __init__(self,
+                 is_fixed,
+                 is_train):
+        assert isinstance(is_fixed, bool), "fixed_len is a boolean variable."
+        self.is_fixed = is_fixed
+        self.is_train = is_train
+
+    def get_generator(self,
+                      data,
+                      labels,
+                      indxs):
+        print('Not implemented.')
+
+class FixedLenGenerator(Generator):
 
     def __init__(self,
                  batch_size,
@@ -323,11 +338,12 @@ class FixedLenGenerator:
                  overlap,
                  sampling_rate,
                  is_train):
+        super().__init__(True,
+                         is_train)
         self.batch_size = batch_size
         self.duration = duration
         self.overlap = overlap
         self.sampling_rate = sampling_rate
-        self.is_train = is_train
 
     def get_generator(self,
                       data,
@@ -398,7 +414,7 @@ class FixedLenGenerator:
                 yield x_batch, y_batch
 
 
-class VarLenGenerator:
+class VarLenGenerator(Generator):
 
     def __init__(self,
                  min_duration,
@@ -406,13 +422,15 @@ class VarLenGenerator:
                  iter_per_group,
                  sampling_rate,
                  is_train):
+        super().__init__(False,
+                         is_train)
         self.min_duration = min_duration
         self.max_duration = max_duration
         self.iter_per_group = iter_per_group
         self.sampling_rate = sampling_rate
         self.is_train = is_train
 
-    def get_generator(self, data, labels):
+    def get_generator(self, data, labels, indxs=None):
         gen = self._varsize_data_generator(data, labels)
         n_iter = self.iter_per_group * (self.max_duration - self.min_duration + 1)
         return gen, n_iter
