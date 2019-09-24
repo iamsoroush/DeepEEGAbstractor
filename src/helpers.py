@@ -32,6 +32,9 @@ class CrossValidator:
                  k,
                  channel_drop=False,
                  np_random_state=71):
+        assert task in ('rnr', 'hmdd'), "task must be one of {'rnr', 'hmdd'}"
+        assert data_mode in ('cross_subject', 'balanced'), "data_mode must be one of {'cross_subject', 'balanced'}"
+
         self.task = task
         self.data_mode = data_mode
         self.results_dir = results_dir
