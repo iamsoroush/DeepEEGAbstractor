@@ -169,12 +169,12 @@ class CrossValidator:
             test_labels = [labels[j] for j in test_ind]
             train_gen, n_iter_train = self.train_generator.get_generator(data=train_data,
                                                                          labels=train_labels)
-            test_gen, n_iter_test = self.train_generator.get_generator(data=test_data,
-                                                                       labels=test_labels)
+            test_gen, n_iter_test = self.test_generator.get_generator(data=test_data,
+                                                                      labels=test_labels)
         else:
-            train_gen, n_iter_train = self.test_generator.get_generator(data=data,
-                                                                        labels=labels,
-                                                                        indxs=train_ind)
+            train_gen, n_iter_train = self.train_generator.get_generator(data=data,
+                                                                         labels=labels,
+                                                                         indxs=train_ind)
             test_gen, n_iter_test = self.test_generator.get_generator(data=data,
                                                                       labels=labels,
                                                                       indxs=test_ind)
