@@ -3,7 +3,7 @@
 # Author: Soroush Moazed <soroush.moazed@gmail.com>
 
 import os
-from .dataset import data_generator
+import pickle
 
 import numpy as np
 from sklearn.model_selection import StratifiedKFold
@@ -18,47 +18,216 @@ else:
     import keras
 
 
-def kfold_cv(model_obj,
-             data,
-             labels,
-             k=4,
-             batch_size=64,
-             epochs=20):
-    scores = list()
-    folds = StratifiedKFold(n_splits=k, shuffle=True)
-    loss = model_obj.loss
-    optimizer = model_obj.optimizer
-    metrics = model_obj.metrics
-    for i, (train_index, test_index) in enumerate(folds.split(np.zeros(len(data)), labels)):
+class CrossValidator:
+
+    def __init__(self,
+                 task,
+                 data_mode,
+                 results_dir,
+                 model_name,
+                 epochs,
+                 train_generator,
+                 test_generator,
+                 t,
+                 k,
+                 channel_drop=False,
+                 np_random_state=71):
+        self.task = task
+        self.data_mode = data_mode
+        self.results_dir = results_dir
+        self.model_name = model_name
+        self.epochs = epochs
+        self.train_generator = train_generator
+        self.test_generator = test_generator
+        self.t = t
+        self.k = k
+        self.channel_drop = channel_drop
+        self.np_random_state = np_random_state
+
+        if hasattr(train_generator, 'min_duration'):
+            train_gen_type = 'var'
+            tr_pr_1 = train_generator.min_duration
+            tr_pr_2 = train_generator.max_duration
+        else:
+            train_gen_type = 'fixed'
+            tr_pr_1 = train_generator.duration
+            tr_pr_2 = train_generator.overlap
+        if hasattr(test_generator, 'min_duration'):
+            test_gen_type = 'var'
+            te_pr_1 = test_generator.min_duration
+            te_pr_2 = test_generator.max_duration
+        else:
+            test_gen_type = 'fixed'
+            te_pr_1 = test_generator.duration
+            te_pr_2 = test_generator.overlap
+
+        train_data_prefix = train_gen_type + str(tr_pr_1) + str(tr_pr_2)
+        test_data_prefix = test_gen_type + str(te_pr_1) + str(te_pr_2)
+
+        self.cv_dir = os.path.join(results_dir, '{}_{}'.format(data_mode, task))
+        if not os.path.exists(self.cv_dir):
+            os.mkdir(self.cv_dir)
+
+        unique_identifier = '{}time-{}fold-{}epochs-tr_{}-te_{}'.format(t,
+                                                                        k,
+                                                                        epochs,
+                                                                        train_data_prefix,
+                                                                        test_data_prefix)
+        indices_filename = 'train_test_indices-{}.pkl'.format(unique_identifier)
+        self.indices_path = os.path.join(self.cv_dir, indices_filename)
+
+        scores_filename = '{}-{}.npy'.format(model_name, unique_identifier)
+        self.scores_path = os.path.join(results_dir, scores_filename)
+        self.rounds_file_names = ['{}-time{}-fold{}-{}epochs-tr_{}-te_{}.npy'.format(model_name,
+                                                                                     i + 1,
+                                                                                     j + 1,
+                                                                                     epochs,
+                                                                                     train_data_prefix,
+                                                                                     test_data_prefix) for i in range(t) for j in range(k)]
+        self.rounds_file_paths = [os.path.join(results_dir, file_name) for file_name in self.rounds_file_names]
+
+    def do_cv(self,
+              model_obj,
+              data,
+              labels):
+        if os.path.exists(self.scores_path):
+            print('Final scores already exists.')
+            final_scores = np.load(self.scores_path)
+            return final_scores
+
+        train_indices, test_indices = self._get_train_test_indices(data, labels)
+        dir_file_names = os.listdir(self.cv_dir)
+        for i in range(self.t):
+            print('time {}/{}:'.format(i + 1, self.t))
+            for j in range(self.k):
+                print(' step {}/{} ...'.format(j + 1, self.k))
+                ind = int(i * self.t + j)
+                file_name = self.rounds_file_names[ind]
+                file_path = self.rounds_file_paths[ind]
+                if file_name not in dir_file_names:
+                    train_ind = train_indices[i][j]
+                    test_ind = test_indices[i][j]
+                    scores = self._do_train_eval(model_obj,
+                                                 data,
+                                                 labels,
+                                                 train_ind,
+                                                 test_ind)
+                    np.save(file_path, scores)
+        final_scores = self._generate_final_scores()
+        return final_scores
+
+    def _get_train_test_indices(self, data, labels):
+        if os.path.exists(self.indices_path):
+            with open(self.indices_path, 'rb') as pkl:
+                indices = pickle.load(pkl)
+            train_indices = indices[0]
+            test_indices = indices[1]
+            print('Train-test indices already exists.')
+        else:
+            train_indices = list()
+            test_indices = list()
+            for i in range(self.t):
+                train_indices.append(list())
+                test_indices.append(list())
+                folds = StratifiedKFold(n_splits=self.k,
+                                        shuffle=True,
+                                        random_state=self.np_random_state)
+                for train_ind, test_ind in folds.split(data, labels):
+                    train_indices[-1].append(train_ind)
+                    test_indices[-1].append(test_ind)
+            with open(self.indices_path, 'wb') as pkl:
+                pickle.dump([train_indices, test_indices], pkl)
+            print('Train-test indices generated.')
+        return train_indices, test_indices
+
+    def _do_train_eval(self,
+                       model_obj,
+                       data,
+                       labels,
+                       train_ind,
+                       test_ind):
+        loss = model_obj.loss
+        optimizer = model_obj.optimizer
+        metrics = model_obj.metrics
+
+        if self.data_mode == 'cross_subject':
+            train_data = [data[j] for j in train_ind]
+            train_labels = [labels[j] for j in train_ind]
+            test_data = [data[j] for j in test_ind]
+            test_labels = [labels[j] for j in test_ind]
+            train_gen, n_iter_train = self.train_generator.get_generator(train_data, train_labels)
+            test_gen, n_iter_test = self.train_generator.get_generator(test_data, test_labels)
+        else:
+            train_gen, n_iter_train = self.test_generator.get_generator(data, labels, train_ind)
+            test_gen, n_iter_test = self.test_generator.get_generator(data, labels, test_ind)
+
         model = model_obj.create_model()
         model.compile(loss=loss, optimizer=optimizer, metrics=metrics)
-        train_gen = data_generator(data, labels, train_index.copy(), batch_size)
-        test_gen = data_generator(data, labels, test_index.copy(), batch_size)
-        n_iter_train = len(train_index) // batch_size
-        n_iter_test = len(test_index) // batch_size
-        print(' step {}/{} ...'.format(i + 1, k))
-        model.fit_generator(generator=train_gen, steps_per_epoch=n_iter_train,
-                            epochs=epochs, verbose=False)
-        score = model.evaluate_generator(test_gen, steps=n_iter_test, verbose=False)
-        scores.append(score)
-    scores = np.array(scores)
-    return scores
 
+        model.fit_generator(generator=train_gen,
+                            steps_per_epoch=n_iter_train,
+                            epochs=self.epochs,
+                            verbose=False)
+        scores = model.evaluate_generator(test_gen,
+                                          steps=n_iter_test,
+                                          verbose=False)
+        if self.channel_drop:
+            scores = [scores]
+            scores.extend(self._get_channel_drop_scores(test_gen,
+                                                        n_iter_test,
+                                                        model))
 
-def ttime_kfold_cv(model_obj,
-                   data,
-                   labels,
-                   t=5,
-                   k=2,
-                   batch_size=64,
-                   epochs=20):
-    scores = list()
-    for i in range(t):
-        print('time {}:'.format(i + 1))
-        score = kfold_cv(model_obj, data, labels, k, batch_size, epochs)
-        scores.append(score)
-    scores = np.array(scores)
-    return scores
+        return scores
+
+    def _generate_final_scores(self):
+        final_scores = list()
+        for file_path in self.rounds_file_paths:
+            final_scores.append(np.load(file_path))
+        final_scores = np.array(final_scores).reshape((self.t, self.k, final_scores[0].shape[0]))
+        np.save(self.scores_path, final_scores)
+        for file_path in self.rounds_file_paths:
+            os.remove(file_path)
+        return final_scores
+
+    def _get_channel_drop_scores(self,
+                                 test_gen,
+                                 n_iter_test,
+                                 model):
+        x_test, y_test = list(), list()
+        for i in range(n_iter_test):
+            x_batch, y_batch = next(test_gen)
+            x_test.extend(x_batch)
+            y_test.extend(y_batch)
+        x_test = np.array(x_test)
+        y_test = np.array(y_test)
+
+        fpr = list()
+        tpr = list()
+        th = list()
+        rocauc = list()
+        for drop in range(4):
+            if drop == 0:
+                x_dropped = x_test
+            else:
+                x_dropped = self.drop_channels(x_test, drop ** 2)
+            y_prob = model.predict(x_dropped)[:, 0]
+            false_positive_rate, true_positive_rate, thresholds = roc_curve(y_test, y_prob)
+            roc_auc = auc(false_positive_rate, true_positive_rate)
+
+            fpr.append(false_positive_rate)
+            tpr.append(true_positive_rate)
+            th.append(thresholds)
+            rocauc.append(roc_auc)
+        return np.array([fpr, tpr, th, rocauc])
+
+    @staticmethod
+    def drop_channels(arr, drop=2):
+        n_samples, n_times, n_channels = arr.shape
+        to_drop = np.random.randint(low=0, high=n_channels, size=(n_samples, drop))
+        dropped_x = arr.copy()
+        for i, channels in enumerate(to_drop):
+            dropped_x[i, :, channels] = 0
+        return dropped_x
 
 
 def ttime_kfold_cross_validation(model_obj,
