@@ -7,7 +7,7 @@ import pickle
 
 import numpy as np
 from sklearn.model_selection import StratifiedKFold
-from sklearn.metrics import roc_curve, auc
+from sklearn.metrics import roc_curve, auc, confusion_matrix
 import tensorflow as tf
 import matplotlib.pyplot as plt
 plt.style.use('seaborn-darkgrid')
@@ -186,27 +186,29 @@ class CrossValidator:
                             steps_per_epoch=n_iter_train,
                             epochs=self.epochs,
                             verbose=False)
-        scores = model.evaluate_generator(test_gen,
-                                          steps=n_iter_test,
-                                          verbose=False)
-        # if self.data_mode == 'cross_subject':
-        #     x_test = list()
-        #     y_test = list()
-        #     for i in range(n_iter_test):
-        #         x_batch, y_batch = next(test_gen)
-        #         x_test.extend(x_batch)
-        #         y_test.extend(y_batch)
-        #     x_test = np.array(x_test)
-        #     y_test = np.array(y_test)
-        #     subject_ids = np.array(test_gen.belonged_to_subject[: len(y_test)])
-        #     y_subjects = list()
-        #     y_preds = list()
-        #     for s_id in np.unique(subject_ids):
-        #         indx = np.where(subject_ids == s_id)[0]
-        #         x_subject = x_test[indx]
-        #         y_subjects.append(int(y_test[indx][0]))
-        #         y_pred_proba = model.predict(x_subject).mean()
-        #         y_preds.append(int(np.where(y_pred_proba > 0.5, 1, 0)))
+
+        x_test = list()
+        y_test = list()
+        for i in range(n_iter_test):
+            x_batch, y_batch = next(test_gen)
+            x_test.extend(x_batch)
+            y_test.extend(y_batch)
+        x_test = np.array(x_test)
+        y_test = np.array(y_test)
+        scores = model.evaluate(x_test, y_test, verbose=False)
+
+        if self.data_mode == 'cross_subject':
+            subject_ids = np.array(test_gen.belonged_to_subject[: len(y_test)])
+            y_subjects = list()
+            y_preds = list()
+            for s_id in np.unique(subject_ids):
+                indx = np.where(subject_ids == s_id)[0]
+                x_subject = x_test[indx]
+                y_subjects.append(int(y_test[indx][0]))
+                y_pred_proba = model.predict(x_subject).mean()
+                y_preds.append(int(np.where(y_pred_proba > 0.5, 1, 0)))
+            tn, fp, fn, tp = confusion_matrix(y_subjects, y_preds).ravel()
+            scores.append([tn, fp, fn, tp])
 
         if self.channel_drop:
             scores = [scores]
