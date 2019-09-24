@@ -321,23 +321,24 @@ class FixedLenGenerator:
                  batch_size,
                  duration,
                  overlap,
-                 sampling_rate):
+                 sampling_rate,
+                 is_train):
         self.batch_size = batch_size
         self.duration = duration
         self.overlap = overlap
         self.sampling_rate = sampling_rate
+        self.is_train = is_train
 
     def get_generator(self,
                       data,
                       labels,
-                      is_train,
                       indxs=None):
         if indxs is None:
             x, y = self._generate_data_instances(data, labels)
-            gen = self._generator(x, y, is_train)
+            gen = self._generator(x, y)
             n_iter = len(x) // self.batch_size
         else:
-            gen = self._generator(data, labels, is_train, indxs)
+            gen = self._generator(data, labels, indxs)
             n_iter = len(indxs) // self.batch_size
         return gen, n_iter
 
@@ -374,7 +375,6 @@ class FixedLenGenerator:
     def _generator(self,
                    data,
                    labels,
-                   is_train,
                    indxs=None):
         """Yields a batch of data and labels in each iteration."""
 
@@ -386,7 +386,7 @@ class FixedLenGenerator:
         start_indx = start_indx[: -1]
         start_end = list(zip(start_indx, end_indx))
         while True:
-            if is_train:
+            if self.is_train:
                 np.random.shuffle(indxs)
             for s, e in start_end:
                 ind = indxs[s: e]
@@ -404,34 +404,18 @@ class VarLenGenerator:
                  min_duration,
                  max_duration,
                  iter_per_group,
-                 sampling_rate):
+                 sampling_rate,
+                 is_train):
         self.min_duration = min_duration
         self.max_duration = max_duration
         self.iter_per_group = iter_per_group
         self.sampling_rate = sampling_rate
+        self.is_train = is_train
 
     def get_generator(self, data, labels):
         gen = self._varsize_data_generator(data, labels)
         n_iter = self.iter_per_group * (self.max_duration - self.min_duration + 1)
         return gen, n_iter
-
-    def _varsize_data_generator(self, data, labels):
-        while True:
-            data_dict = self._get_varsize_data(data, labels)
-            group_indices = self._get_group_indices(data_dict)
-            groups = list(data_dict.keys())
-            for i in range(self.iter_per_group):
-                np.random.shuffle(groups)
-                for j in groups:
-                    ind = group_indices[j][i]
-                    x = data_dict[j]['data'][ind[0]: ind[1]]
-                    batch_mean = x.mean(axis=(1, 2), keepdims=True)
-                    batch_std = x.std(axis=(1, 2), keepdims=True, ddof=1)
-                    if not np.all(batch_std):
-                        batch_std = np.where(batch_std > 0, batch_std, 1)
-                    x_batch = (x - batch_mean) / batch_std
-                    y_batch = data_dict[j]['labels'][ind[0]: ind[1]]
-                    yield x_batch, y_batch
 
     def _get_varsize_data(self, data, labels):
         data_dict = {k: {'data': list(),
@@ -479,3 +463,22 @@ class VarLenGenerator:
             end.append(n_samples - 1)
             indices[duration] = np.array(list(zip(start, end)))
         return indices
+
+    def _varsize_data_generator(self, data, labels):
+        while True:
+            data_dict = self._get_varsize_data(data, labels)
+            group_indices = self._get_group_indices(data_dict)
+            groups = list(data_dict.keys())
+            for i in range(self.iter_per_group):
+                if self.is_train:
+                    np.random.shuffle(groups)
+                for j in groups:
+                    ind = group_indices[j][i]
+                    x = data_dict[j]['data'][ind[0]: ind[1]]
+                    batch_mean = x.mean(axis=(1, 2), keepdims=True)
+                    batch_std = x.std(axis=(1, 2), keepdims=True, ddof=1)
+                    if not np.all(batch_std):
+                        batch_std = np.where(batch_std > 0, batch_std, 1)
+                    x_batch = (x - batch_mean) / batch_std
+                    y_batch = data_dict[j]['labels'][ind[0]: ind[1]]
+                    yield x_batch, y_batch
