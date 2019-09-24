@@ -113,7 +113,7 @@ class CrossValidator:
             print('time {}/{}:'.format(i + 1, self.t))
             for j in range(self.k):
                 print(' step {}/{} ...'.format(j + 1, self.k))
-                ind = int(i * self.t + j)
+                ind = int(i * self.k + j)
                 file_name = self.rounds_file_names[ind]
                 file_path = self.rounds_file_paths[ind]
                 if file_name not in dir_file_names:
