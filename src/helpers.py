@@ -47,7 +47,7 @@ class CrossValidator:
         self.channel_drop = channel_drop
         self.np_random_state = np_random_state
 
-        if hasattr(train_generator, 'min_duration'):
+        if not train_generator.is_fixed:
             train_gen_type = 'var'
             tr_pr_1 = train_generator.min_duration
             tr_pr_2 = train_generator.max_duration
@@ -55,7 +55,7 @@ class CrossValidator:
             train_gen_type = 'fixed'
             tr_pr_1 = train_generator.duration
             tr_pr_2 = train_generator.overlap
-        if hasattr(test_generator, 'min_duration'):
+        if not test_generator.is_fixed:
             test_gen_type = 'var'
             te_pr_1 = test_generator.min_duration
             te_pr_2 = test_generator.max_duration
@@ -158,11 +158,17 @@ class CrossValidator:
             train_labels = [labels[j] for j in train_ind]
             test_data = [data[j] for j in test_ind]
             test_labels = [labels[j] for j in test_ind]
-            train_gen, n_iter_train = self.train_generator.get_generator(train_data, train_labels)
-            test_gen, n_iter_test = self.train_generator.get_generator(test_data, test_labels)
+            train_gen, n_iter_train = self.train_generator.get_generator(data=train_data,
+                                                                         labels=train_labels)
+            test_gen, n_iter_test = self.train_generator.get_generator(data=test_data,
+                                                                       labels=test_labels)
         else:
-            train_gen, n_iter_train = self.test_generator.get_generator(data, labels, train_ind)
-            test_gen, n_iter_test = self.test_generator.get_generator(data, labels, test_ind)
+            train_gen, n_iter_train = self.test_generator.get_generator(data=data,
+                                                                        labels=labels,
+                                                                        indxs=train_ind)
+            test_gen, n_iter_test = self.test_generator.get_generator(data=data,
+                                                                      labels=labels,
+                                                                      indxs=test_ind)
 
         model = model_obj.create_model()
         model.compile(loss=loss, optimizer=optimizer, metrics=metrics)
@@ -186,7 +192,9 @@ class CrossValidator:
         final_scores = list()
         for file_path in self.rounds_file_paths:
             final_scores.append(np.load(file_path))
-        final_scores = np.array(final_scores).reshape((self.t, self.k, final_scores[0].shape[0]))
+        final_scores = np.array(final_scores).reshape((self.t,
+                                                       self.k,
+                                                       final_scores[0].shape[0]))
         np.save(self.scores_path, final_scores)
         for file_path in self.rounds_file_paths:
             os.remove(file_path)
