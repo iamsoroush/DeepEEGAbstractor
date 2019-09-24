@@ -198,7 +198,7 @@ class CrossValidator:
         scores = model.evaluate(x_test, y_test, verbose=False)
 
         if self.data_mode == 'cross_subject':
-            subject_ids = np.array(test_gen.belonged_to_subject[: len(y_test)])
+            subject_ids = np.array(self.test_generator.belonged_to_subject[: len(y_test)])
             y_subjects = list()
             y_preds = list()
             for s_id in np.unique(subject_ids):
