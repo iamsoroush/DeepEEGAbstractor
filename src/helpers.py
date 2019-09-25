@@ -104,7 +104,7 @@ class CrossValidator:
               labels):
         if os.path.exists(self.scores_path):
             print('Final scores already exists.')
-            final_scores = np.load(self.scores_path)
+            final_scores = np.load(self.scores_path, allow_pickle=True)
             return final_scores
 
         train_indices, test_indices = self._get_train_test_indices(data, labels)
@@ -321,7 +321,9 @@ class CrossValidator:
         x_test = np.array(x_test)
         y_test = np.array(y_test)
         scores = [list() for _ in range(3)]
-        scores[0].extend(model.evaluate(x_test, y_test, verbose=False))
+        scores[0].extend(model.evaluate_generator(test_gen,
+                                                  steps=n_iter_test,
+                                                  verbose=False))
 
         if self.data_mode == 'cross_subject':
             scores[1].extend(self._calc_subject_wise_scores(model,
@@ -353,7 +355,7 @@ class CrossValidator:
     def _generate_final_scores(self):
         final_scores = list()
         for file_path in self.rounds_file_paths:
-            final_scores.append(np.load(file_path))
+            final_scores.append(np.load(file_path, allow_pickle=True))
         final_scores = np.array(final_scores)
         np.save(self.scores_path, final_scores)
         for file_path in self.rounds_file_paths:
