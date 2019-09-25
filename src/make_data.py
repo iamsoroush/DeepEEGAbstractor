@@ -46,12 +46,12 @@ def generate_df(src_dir):
     return df
 
 
-def generate_data(src_dir, dst_dir):
+def generate_data(src_dir, dst_dir, n_channels=19):
     df = generate_df(src_dir)
     s = df.iloc[0]
     raw = mne.io.read_raw_edf(s['Path'], preload=True, verbose=False)
     raw.pick_types(eeg=True)
-    channels = raw.ch_names[:20]
+    channels = raw.ch_names[:n_channels]
 
     if not os.path.exists(dst_dir):
         os.mkdir(dst_dir)
