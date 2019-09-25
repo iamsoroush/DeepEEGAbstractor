@@ -25,12 +25,12 @@ def generate_df(src_dir):
 
     data_paths = [os.path.abspath(os.path.join(src_dir, data_dir)) for data_dir in os.listdir(src_dir)]
 
-    subject_number = [int(os.path.basename(path).split('_')[1][1:]) for path in data_paths]
-    healthy = [True if 'H_' in path else False for path in data_paths]
-    mdd = [True if 'MDD_' in path else False for path in data_paths]
-    eo = [True if '_EO' in path else False for path in data_paths]
-    ec = [True if '_EC' in path else False for path in data_paths]
-    erp = [True if '_TASK' in path else False for path in data_paths]
+    subject_number = [int(os.path.basename(path).split()[1][1:]) for path in data_paths]
+    healthy = [True if 'H ' in path else False for path in data_paths]
+    mdd = [True if 'MDD ' in path else False for path in data_paths]
+    eo = [True if ' EO' in path else False for path in data_paths]
+    ec = [True if ' EC' in path else False for path in data_paths]
+    erp = [True if ' TASK' in path else False for path in data_paths]
 
     mapping_dict = {'Path': data_paths, 'Subject Number': subject_number,
                     'Healthy': healthy, 'MDD': mdd, 'EO': eo, 'EC': ec, 'ERP': erp}
