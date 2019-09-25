@@ -5,6 +5,8 @@
 import os
 from tqdm import tqdm
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
+from urllib.request import urlretrieve
+import zipfile
 
 import mne
 import numpy as np
@@ -71,6 +73,27 @@ def generate_data(src_dir, dst_dir, n_channels=19):
             np.save(path_to_save, arr)
             pbar.update(1)
     return
+
+
+def download_data(download_dir):
+    zip_file_name = 'eeg_data.zip'
+    zip_file_path = os.path.join(download_dir, zip_file_name)
+    data_dir = os.path.join(download_dir, 'eeg_data')
+
+    if os.path.exists(data_dir):
+        print('Data exists.')
+        return
+    elif os.path.exists(zip_file_path):
+        print('Zip file exists.')
+    else:
+        url = 'https://ndownloader.figshare.com/articles/4244171/versions/2'
+        print('Downloading file {} ...'.format(zip_file_name))
+        urlretrieve(url, zip_file_path)
+        print('File downloaded to ', zip_file_path)
+
+    with zipfile.ZipFile(zip_file_path, 'r') as zip_ref:
+        zip_ref.extractall(data_dir)
+    print('Zip file extracted to ', data_dir)
 
 
 if __name__ == '__main__':
