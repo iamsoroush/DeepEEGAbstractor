@@ -133,7 +133,7 @@ class CrossValidator:
             print('Final scores does not exist.')
             return
 
-        scores = np.load(self.scores_path)[: 0]
+        scores = np.load(self.scores_path, allow_pickle=True)[: 0]
         keys = ['MSE Loss', 'Accuracy', 'F1-Score', 'Sensitivity', 'Specificity']
         fig, ax = plt.subplots(figsize=(20, 8), dpi=dpi)
 
@@ -174,7 +174,7 @@ class CrossValidator:
         if not os.path.exists(self.scores_path):
             print('Final scores does not exist.')
             return
-        scores = np.load(self.scores_path)[:, 1]
+        scores = np.load(self.scores_path, allow_pickle=True)[:, 1]
         tns = scores[:, 0]
         fps = scores[:, 1]
         fns = scores[:, 2]
@@ -223,7 +223,7 @@ class CrossValidator:
         if not os.path.exists(self.scores_path):
             print('Final scores does not exist.')
             return
-        scores = np.load(self.scores_path)[:, 2]
+        scores = np.load(self.scores_path, allow_pickle=True)[:, 2]
         fprs = np.array(scores[:, 0])
         tprs = np.array(scores[:, 1])
 
