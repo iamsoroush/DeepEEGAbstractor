@@ -49,6 +49,10 @@ def generate_df(src_dir):
 
 
 def generate_data(src_dir, dst_dir, n_channels=19):
+    """Loads each trial, for each time step normalizes channels to mean 0 and std 1 and saves  the
+    normalized array.
+    """
+
     df = generate_df(src_dir)
     s = df.iloc[0]
     raw = mne.io.read_raw_edf(s['Path'], preload=True, verbose=False)
