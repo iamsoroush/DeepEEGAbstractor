@@ -160,7 +160,7 @@ class CrossValidator:
             y_coord += 0.03
             keys.append(key)
 
-        ax.legend(keys, loc='lower left')
+        ax.legend(keys[1:], loc='lower left')
         ax.set_title(self.model_name)
         ax.set_xlabel('# Round')
         # ax.set_xticks(range(1, t * k + 1),  direction='vertical')
@@ -223,7 +223,7 @@ class CrossValidator:
         if not os.path.exists(self.scores_path):
             print('Final scores does not exist.')
             return
-        scores = np.load(self.scores_path, allow_pickle=True)[:, 2]
+        scores = np.array(list(np.load(self.scores_path, allow_pickle=True)[:, 2]))
         fprs = np.array(scores[:, 0])
         tprs = np.array(scores[:, 1])
 
