@@ -266,3 +266,198 @@ class DeepEEGAbstractor(KerasModel):
         out = InstanceNorm(mean=0.5, stddev=0.5)(out)
         out = keras.layers.ReLU()(out)
         return out
+
+
+class CausalConv1D(keras.layers.Layer):
+
+    def __init__(self,
+                 filters,
+                 kernel_size,
+                 dilation_rate,
+                 use_bias,
+                 norm_mean=0.0,
+                 norm_std=1.0,
+                 **kwargs):
+        super(CausalConv1D, self).__init__(**kwargs)
+        self.causal_conv1d = keras.layers.Conv1D(filters=filters,
+                                                 kernel_size=kernel_size,
+                                                 strides=1,
+                                                 padding='same',
+                                                 data_format='channels_last',
+                                                 dilation_rate=dilation_rate,
+                                                 activation=None,
+                                                 use_bias=use_bias)
+        self.instance_normalization = InstanceNorm(mean=norm_mean, stddev=norm_std)
+        self.activation = keras.layers.ELU()
+
+    def call(self, inputs):
+        x = self.causal_conv1d(inputs)
+        x = self.instance_normalization(x)
+        out = self.activation(x)
+        return out
+
+    def compute_output_shape(self, input_shape):
+        return input_shape
+
+
+class EEGInceptionBlock(keras.layers.Layer):
+
+    def __init__(self,
+                 filters,
+                 kernel_size,
+                 dilation_rate,
+                 use_bias,
+                 **kwargs):
+        super(EEGInceptionBlock, self).__init__(**kwargs)
+        self.causal_conv1d_dilation1 = CausalConv1D(filters=filters,
+                                                    kernel_size=kernel_size,
+                                                    dilation_rate=1,
+                                                    use_bias=use_bias)
+        self.causal_conv1d_dilation5 = CausalConv1D(filters=filters,
+                                                    kernel_size=kernel_size,
+                                                    dilation_rate=dilation_rate,
+                                                    use_bias=use_bias)
+        self.pointwise_conv1d = CausalConv1D(filters=filters,
+                                             kernel_size=1,
+                                             dilation_rate=1,
+                                             use_bias=use_bias)
+        self.concatenate = keras.layers.Concatenate(axis=-1)
+        self.n_output_channels = 3 * filters
+
+    def call(self, inputs):
+        branch_a = self.causal_conv1d_dilation1(inputs)
+
+        branch_b = self.causal_conv1d_dilation1(inputs)
+        branch_b = self.causal_conv1d_dilation5(branch_b)
+
+        branch_c = self.pointwise_conv1d(inputs)
+
+        out = self.concatenate([branch_a, branch_b, branch_c])
+        return out
+
+    def compute_output_shape(self, input_shape):
+        return (input_shape[0], input_shape[1], self.n_output_channels)
+
+
+class ResEEGInceptionBlock(keras.layers.Layer):
+
+    def __init__(self,
+                 filters,
+                 kernel_size,
+                 dilation_rate,
+                 use_bias,
+                 scale_factor=0.5,
+                 **kwargs):
+        super(ResEEGInceptionBlock, self).__init__(**kwargs)
+        self.inception_1 = EEGInceptionBlock(filters=filters,
+                                             kernel_size=kernel_size,
+                                             dilation_rate=dilation_rate,
+                                             use_bias=use_bias)
+        self.inception_2 = EEGInceptionBlock(filters=filters,
+                                             kernel_size=kernel_size,
+                                             dilation_rate=dilation_rate,
+                                             use_bias=use_bias)
+        n_channels = self.inception_2.n_output_channels
+        self.point_conv = CausalConv1D(filters=n_channels,
+                                       kernel_size=1,
+                                       dilation_rate=1,
+                                       use_bias=use_bias)
+        self.add_skip = keras.layers.Lambda(lambda inputs, scale: inputs[0] + inputs[1] * scale,
+                                            arguments={'scale': scale_factor})
+
+    def call(self, inputs):
+        x = self.inception_1(inputs)
+        x = self.inception_2(x)
+        shortcut_branch = self.point_conv(inputs)
+        x = self.add_skip([shortcut_branch, x])
+        return x
+
+    def compute_output_shape(self, input_shape):
+        return input_shape
+
+
+class CwCDInception1D(keras.Model):
+
+    def __init__(self,
+                 filters,
+                 kernel_size,
+                 dilation_rate,
+                 use_bias,
+                 **kwargs):
+        super(CwCDInception1D, self).__init__(**kwargs)
+        self.causal_conv1d = CausalConv1D(filters,
+                                          kernel_size,
+                                          dilation_rate,
+                                          use_bias)
+        self.inception1d = EEGInceptionBlock(filters,
+                                             kernel_size,
+                                             dilation_rate,
+                                             use_bias)
+        #         self.splits = [keras.layers.Lambda(lambda h: h[:, :, i]) for i in range(20)]
+        self.expand_dims = keras.layers.Lambda(keras.backend.expand_dims, arguments={'axis': 2})
+        self.concat = keras.layers.Concatenate(axis=-1)
+
+    def call(self, inputs):
+        input_shape = keras.backend.int_shape(inputs)
+        outputs = list()
+        channels = input_shape[-1]
+        for i in range(channels):
+            x = keras.layers.Lambda(lambda h: h[:, :, i])(inputs)
+            x = self.expand_dims(x)
+            x = self.inception1d(x)
+            outputs.append(x)
+
+        out = self.concat(outputs)
+        return out
+
+
+def get_deega(n_channels=19,
+              time_steps=None,
+              model_name='deep_eeg_abstractor',
+              units=(6, 8, 10),
+              dropout_rate=0.1,
+              pool_size=4,
+              use_bias=True,
+              dilation_rate=4,
+              kernel_size=8,
+              weighted_add_scale=0.5):
+
+    """Use this only with tf 2.0"""
+    input_tensor = keras.Input(shape=(time_steps, n_channels), name='input_tensor')
+
+    x = keras.layers.SpatialDropout1D(dropout_rate,
+                                      name='block1-spatial_dropout')(input_tensor)
+    x = ResEEGInceptionBlock(filters=units[0],
+                             kernel_size=kernel_size,
+                             dilation_rate=dilation_rate,
+                             use_bias=use_bias,
+                             scale_factor=weighted_add_scale,
+                             name='block1-res_eeg_inception1d_block')(x)
+    if pool_size is not None:
+        x = keras.layers.AveragePooling1D(pool_size=pool_size,
+                                          strides=pool_size,
+                                          name='block1-pooling1d')(x)
+
+    # Block 2 - n
+    for i, n in enumerate(units[1:]):
+        block_name = 'block' + str(i + 2)
+        x = keras.layers.SpatialDropout1D(dropout_rate / 2,
+                                          name=block_name + '-spatial_dropout')(x)
+        x = ResEEGInceptionBlock(filters=n,
+                                 kernel_size=kernel_size,
+                                 dilation_rate=dilation_rate,
+                                 use_bias=use_bias,
+                                 scale_factor=weighted_add_scale,
+                                 name=block_name + '-res_eeg_inception1d_block')(x)
+        if pool_size is not None:
+            x = keras.layers.AveragePooling1D(pool_size=pool_size,
+                                              strides=pool_size,
+                                              name=block_name + '-pooling1d')(x)
+
+    # Attention layer
+    x = TemporalAttention(name='embedding')(x)
+
+    # Logistic regression unit
+    output_tensor = keras.layers.Dense(1, activation='sigmoid', name='prediction')(x)
+    model = keras.models.Model(input_tensor, output_tensor, name=model_name)
+    return model
