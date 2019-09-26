@@ -253,7 +253,7 @@ class FixedLenGenerator(Generator):
         instances = np.zeros((len(indices), sample_time_steps, channels))
         for ind, (i, j) in enumerate(indices):
             instance = arr[i: j, :]
-            # instance = (instance - instance.mean()) / instance.std()
+            instance = (instance - instance.mean()) / (instance.std() + 0.0001)
             instances[ind, :, :] = instance
         return instances
 
@@ -276,11 +276,6 @@ class FixedLenGenerator(Generator):
             for s, e in start_end:
                 ind = indxs[s: e]
                 x_batch = data[ind]
-                std = x_batch.std(axis=(1, 2),
-                                  keepdims=True,
-                                  ddof=1)
-                x_batch = (x_batch - x_batch.mean(axis=(1, 2),
-                                                  keepdims=True)) / (std + 0.0001)
                 y_batch = labels[ind]
                 yield x_batch, y_batch
 
