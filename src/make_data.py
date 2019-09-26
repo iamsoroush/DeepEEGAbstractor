@@ -70,7 +70,7 @@ def generate_data(src_dir, dst_dir, n_channels=19):
             raw.pick_types(eeg=True)
             raw.pick_channels(channels)
             arr = raw.get_data() * 1e6
-            arr = (arr - arr.mean(axis=0, keepdims=True)) / arr.std(axis=0, keepdims=True)
+            arr = arr - arr.mean(axis=0, keepdims=True)
             label = subject[-1]
 
             path_to_save = os.path.join(dst_dir, 's{}_{}.npy'.format(i + 1, label))
