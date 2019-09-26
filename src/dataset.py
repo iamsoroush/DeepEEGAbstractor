@@ -276,10 +276,11 @@ class FixedLenGenerator(Generator):
             for s, e in start_end:
                 ind = indxs[s: e]
                 x_batch = data[ind]
+                std = x_batch.std(axis=(1, 2),
+                                  keepdims=True,
+                                  ddof=1)
                 x_batch = (x_batch - x_batch.mean(axis=(1, 2),
-                                                  keepdims=True)) / x_batch.std(axis=(1, 2),
-                                                                                keepdims=True,
-                                                                                ddof=1)
+                                                  keepdims=True)) / (std + 0.0001)
                 y_batch = labels[ind]
                 yield x_batch, y_batch
 
