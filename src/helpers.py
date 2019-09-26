@@ -133,7 +133,7 @@ class CrossValidator:
             print('Final scores does not exist.')
             return
 
-        scores = np.load(self.scores_path, allow_pickle=True)[: 0]
+        scores = np.array(list(np.load(self.scores_path, allow_pickle=True)[:, 0]))
         keys = ['MSE Loss', 'Accuracy', 'F1-Score', 'Sensitivity', 'Specificity']
         fig, ax = plt.subplots(figsize=(20, 8), dpi=dpi)
 
@@ -174,7 +174,7 @@ class CrossValidator:
         if not os.path.exists(self.scores_path):
             print('Final scores does not exist.')
             return
-        scores = np.load(self.scores_path, allow_pickle=True)[:, 1]
+        scores = np.array(list(np.load(self.scores_path, allow_pickle=True)[:, 1]))
         tns = scores[:, 0]
         fps = scores[:, 1]
         fns = scores[:, 2]
@@ -312,6 +312,11 @@ class CrossValidator:
                             epochs=self.epochs,
                             verbose=False)
 
+        scores = [list() for _ in range(3)]
+        scores[0].extend(model.evaluate_generator(test_gen,
+                                                  steps=n_iter_test,
+                                                  verbose=False))
+
         x_test = list()
         y_test = list()
         for i in range(n_iter_test):
@@ -320,10 +325,6 @@ class CrossValidator:
             y_test.extend(y_batch)
         x_test = np.array(x_test)
         y_test = np.array(y_test)
-        scores = [list() for _ in range(3)]
-        scores[0].extend(model.evaluate_generator(test_gen,
-                                                  steps=n_iter_test,
-                                                  verbose=False))
 
         if self.data_mode == 'cross_subject':
             scores[1].extend(self._calc_subject_wise_scores(model,
@@ -331,8 +332,8 @@ class CrossValidator:
                                                             y_test))
 
         if self.channel_drop:
-            scores[2].extend(self._get_channel_drop_scores(test_gen,
-                                                           n_iter_test,
+            scores[2].extend(self._get_channel_drop_scores(x_test,
+                                                           y_test,
                                                            model))
         return np.array(scores)
 
@@ -363,17 +364,9 @@ class CrossValidator:
         return final_scores
 
     def _get_channel_drop_scores(self,
-                                 test_gen,
-                                 n_iter_test,
+                                 x_test,
+                                 y_test,
                                  model):
-        x_test, y_test = list(), list()
-        for i in range(n_iter_test):
-            x_batch, y_batch = next(test_gen)
-            x_test.extend(x_batch)
-            y_test.extend(y_batch)
-        x_test = np.array(x_test)
-        y_test = np.array(y_test)
-
         fpr = list()
         tpr = list()
         th = list()
@@ -391,7 +384,7 @@ class CrossValidator:
             tpr.append(true_positive_rate)
             th.append(thresholds)
             rocauc.append(roc_auc)
-        return np.array([fpr, tpr, th, rocauc])
+        return [fpr, tpr, th, rocauc]
 
     @staticmethod
     def _draw_roc_curve(fps, tps, ax):
