@@ -441,7 +441,7 @@ class TemporalInceptionResnet(BaseModel):
 
         shortcut_branch = self._causal_conv1d(input_tensor, channels, 1)
         out = self._weighted_add(shortcut_branch, output_tensor, scale)
-        return keras.layers.ReLU()(out)
+        return keras.layers.ELU()(out)
 
     @staticmethod
     def _weighted_add(shortcut_branch, inception_branch, scale_factor):
@@ -541,7 +541,7 @@ class DeepEEGAbstractor(BaseModel):
 
         shortcut_branch = self._causal_conv1d(input_tensor, channels, 1)
         out = self._weighted_add(shortcut_branch, output_tensor, scale)
-        return keras.layers.ReLU()(out)
+        return keras.layers.ELU()(out)
 
     @staticmethod
     def _weighted_add(shortcut_branch, inception_branch, scale_factor):
@@ -552,13 +552,13 @@ class DeepEEGAbstractor(BaseModel):
         out = keras.layers.Conv1D(filters=filters,
                                   kernel_size=kernel_size,
                                   strides=1,
-                                  padding='causal',
+                                  padding='same',
                                   data_format='channels_last',
                                   dilation_rate=dilation_rate,
                                   activation=None,
                                   use_bias=self.use_bias)(x)
-        out = InstanceNorm(mean=0.5, stddev=0.5)(out)
-        out = keras.layers.ReLU()(out)
+        out = InstanceNorm(mean=0, stddev=1.0)(out)
+        out = keras.layers.ELU()(out)
         return out
 
     def generate_embeddings(self, data):
