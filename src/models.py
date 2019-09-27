@@ -27,7 +27,6 @@ import matplotlib.pyplot as plt
 from sklearn.manifold import TSNE
 
 from .custom_layers import InstanceNorm, TemporalAttention
-from .helpers import f1_score, sensitivity, specificity
 
 import tensorflow as tf
 
@@ -686,3 +685,27 @@ class DeepEEGAbstractorV2(BaseModel):
         out = InstanceNorm(mean=0.5, stddev=0.5)(out)
         out = keras.layers.ReLU()(out)
         return out
+
+
+def f1_score(y_true, y_pred):
+    true_positives = keras.backend.sum(keras.backend.round(keras.backend.clip(y_true * y_pred, 0, 1)))
+    possible_positives = keras.backend.sum(keras.backend.round(keras.backend.clip(y_true, 0, 1)))
+    predicted_positives = keras.backend.sum(keras.backend.round(keras.backend.clip(y_pred, 0, 1)))
+    precision = true_positives / (predicted_positives + keras.backend.epsilon())
+    recall = true_positives / (possible_positives + keras.backend.epsilon())
+    f1_val = 2 * (precision * recall) / (precision + recall + keras.backend.epsilon())
+    return f1_val
+
+
+def sensitivity(y_true, y_pred):
+    # recall: true_p / possible_p
+    true_positives = keras.backend.sum(keras.backend.round(keras.backend.clip(y_true * y_pred, 0, 1)))
+    possible_positives = keras.backend.sum(keras.backend.round(keras.backend.clip(y_true, 0, 1)))
+    return true_positives / (possible_positives + keras.backend.epsilon())
+
+
+def specificity(y_true, y_pred):
+    # true_n / possible_n
+    true_negatives = keras.backend.sum(keras.backend.round(keras.backend.clip((1 - y_true) * (1 - y_pred), 0, 1)))
+    possible_negatives = keras.backend.sum(keras.backend.round(keras.backend.clip(1 - y_true, 0, 1)))
+    return true_negatives / (possible_negatives + keras.backend.epsilon())
