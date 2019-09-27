@@ -7,15 +7,9 @@ import pickle
 
 import numpy as np
 from sklearn.model_selection import StratifiedKFold
-from sklearn.metrics import roc_curve, auc, confusion_matrix
-import tensorflow as tf
+from sklearn.metrics import roc_curve, auc, confusion_matrix, f1_score, mean_squared_error
 import matplotlib.pyplot as plt
 plt.style.use('seaborn-darkgrid')
-
-if tf.__version__.startswith('2'):
-    from tensorflow import keras
-else:
-    import keras
 
 
 class CrossValidator:
@@ -313,10 +307,6 @@ class CrossValidator:
                             verbose=False)
 
         scores = [list() for _ in range(3)]
-        scores[0].extend(model.evaluate_generator(test_gen,
-                                                  steps=n_iter_test,
-                                                  verbose=False))
-
         x_test = list()
         y_test = list()
         for i in range(n_iter_test):
@@ -325,6 +315,15 @@ class CrossValidator:
             y_test.extend(y_batch)
         x_test = np.array(x_test)
         y_test = np.array(y_test)
+
+        y_pred = model.predict(x_test)
+        scores[0].append(mean_squared_error(y_test, y_pred))
+        y_pred = np.where(y_pred > 0.5, 1, 0)
+        tn, fp, fn, tp = confusion_matrix(y_test, y_pred).ravel()
+        scores[0].append((tp + tn) / (tp + tn + fp + fn))
+        scores[0].append(f1_score(y_test, y_pred))
+        scores[0].append(tp / (tp + fn))
+        scores[0].append(tn / (tn + fp))
 
         if self.data_mode == 'cross_subject':
             scores[1].extend(self._calc_subject_wise_scores(model,
@@ -478,25 +477,26 @@ def t_paired_test():
     pass
 
 
-def f1_score(y_true, y_pred):
-    true_positives = keras.backend.sum(keras.backend.round(keras.backend.clip(y_true * y_pred, 0, 1)))
-    possible_positives = keras.backend.sum(keras.backend.round(keras.backend.clip(y_true, 0, 1)))
-    predicted_positives = keras.backend.sum(keras.backend.round(keras.backend.clip(y_pred, 0, 1)))
-    precision = true_positives / (predicted_positives + keras.backend.epsilon())
-    recall = true_positives / (possible_positives + keras.backend.epsilon())
-    f1_val = 2 * (precision * recall) / (precision + recall + keras.backend.epsilon())
-    return f1_val
-
-
-def sensitivity(y_true, y_pred):
-    # recall: true_p / possible_p
-    true_positives = keras.backend.sum(keras.backend.round(keras.backend.clip(y_true * y_pred, 0, 1)))
-    possible_positives = keras.backend.sum(keras.backend.round(keras.backend.clip(y_true, 0, 1)))
-    return true_positives / (possible_positives + keras.backend.epsilon())
-
-
-def specificity(y_true, y_pred):
-    # true_n / possible_n
-    true_negatives = keras.backend.sum(keras.backend.round(keras.backend.clip((1 - y_true) * (1 - y_pred), 0, 1)))
-    possible_negatives = keras.backend.sum(keras.backend.round(keras.backend.clip(1 - y_true, 0, 1)))
-    return true_negatives / (possible_negatives + keras.backend.epsilon())
+# Note: Do not use global metrics as metrics in keras, it will give wrong results when using model.evaluate
+# def f1_score(y_true, y_pred):
+#     true_positives = keras.backend.sum(keras.backend.round(keras.backend.clip(y_true * y_pred, 0, 1)))
+#     possible_positives = keras.backend.sum(keras.backend.round(keras.backend.clip(y_true, 0, 1)))
+#     predicted_positives = keras.backend.sum(keras.backend.round(keras.backend.clip(y_pred, 0, 1)))
+#     precision = true_positives / (predicted_positives + keras.backend.epsilon())
+#     recall = true_positives / (possible_positives + keras.backend.epsilon())
+#     f1_val = 2 * (precision * recall) / (precision + recall + keras.backend.epsilon())
+#     return f1_val
+#
+#
+# def sensitivity(y_true, y_pred):
+#     # recall: true_p / possible_p
+#     true_positives = keras.backend.sum(keras.backend.round(keras.backend.clip(y_true * y_pred, 0, 1)))
+#     possible_positives = keras.backend.sum(keras.backend.round(keras.backend.clip(y_true, 0, 1)))
+#     return true_positives / (possible_positives + keras.backend.epsilon())
+#
+#
+# def specificity(y_true, y_pred):
+#     # true_n / possible_n
+#     true_negatives = keras.backend.sum(keras.backend.round(keras.backend.clip((1 - y_true) * (1 - y_pred), 0, 1)))
+#     possible_negatives = keras.backend.sum(keras.backend.round(keras.backend.clip(1 - y_true, 0, 1)))
+#     return true_negatives / (possible_negatives + keras.backend.epsilon())
