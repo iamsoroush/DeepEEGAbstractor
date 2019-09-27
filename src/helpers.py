@@ -173,7 +173,7 @@ class CrossValidator:
         fps = scores[:, 1]
         fns = scores[:, 2]
         tps = scores[:, 3]
-        acc_vector = (tps + fns) / (tps + fns + fps + tns)
+        acc_vector = (tps + tns) / (tps + fns + fps + tns)
         prec_vector = tps / (tps + fps)
         rec_vector = tps / (tps + fns)
         spec_vector = tns / (tns + fps)
@@ -394,12 +394,12 @@ class CrossValidator:
             alpha = 0.6
             ax.plot(i, j, linewidth=linewidth, alpha=alpha)
 
-        mean_tpr = np.mean(tps, axis=0)
-        mean_fpr = np.linspace(0, 1, 100)
-        std_tpr = np.std(tps, axis=0)
-        tprs_upper = np.minimum(mean_tpr + std_tpr, 1)
-        tprs_lower = np.maximum(mean_tpr - std_tpr, 0)
-        ax.fill_between(mean_fpr, tprs_lower, tprs_upper, color='grey', alpha=.2)
+        # mean_tpr = np.mean(tps, axis=0)
+        # mean_fpr = np.linspace(0, 1, 100)
+        # std_tpr = np.std(tps, axis=0)
+        # tprs_upper = np.minimum(mean_tpr + std_tpr, 1)
+        # tprs_lower = np.maximum(mean_tpr - std_tpr, 0)
+        # ax.fill_between(mean_fpr, tprs_lower, tprs_upper, color='grey', alpha=.2)
         ax.plot([0, 1], [0, 1], linestyle='--')
         ax.axis('tight')
         ax.set_ylabel('True Positive Rate')
@@ -475,28 +475,3 @@ def plot_scores(scores,
 def t_paired_test():
     # TODO: define this function
     pass
-
-
-# Note: Do not use global metrics as metrics in keras, it will give wrong results when using model.evaluate
-# def f1_score(y_true, y_pred):
-#     true_positives = keras.backend.sum(keras.backend.round(keras.backend.clip(y_true * y_pred, 0, 1)))
-#     possible_positives = keras.backend.sum(keras.backend.round(keras.backend.clip(y_true, 0, 1)))
-#     predicted_positives = keras.backend.sum(keras.backend.round(keras.backend.clip(y_pred, 0, 1)))
-#     precision = true_positives / (predicted_positives + keras.backend.epsilon())
-#     recall = true_positives / (possible_positives + keras.backend.epsilon())
-#     f1_val = 2 * (precision * recall) / (precision + recall + keras.backend.epsilon())
-#     return f1_val
-#
-#
-# def sensitivity(y_true, y_pred):
-#     # recall: true_p / possible_p
-#     true_positives = keras.backend.sum(keras.backend.round(keras.backend.clip(y_true * y_pred, 0, 1)))
-#     possible_positives = keras.backend.sum(keras.backend.round(keras.backend.clip(y_true, 0, 1)))
-#     return true_positives / (possible_positives + keras.backend.epsilon())
-#
-#
-# def specificity(y_true, y_pred):
-#     # true_n / possible_n
-#     true_negatives = keras.backend.sum(keras.backend.round(keras.backend.clip((1 - y_true) * (1 - y_pred), 0, 1)))
-#     possible_negatives = keras.backend.sum(keras.backend.round(keras.backend.clip(1 - y_true, 0, 1)))
-#     return true_negatives / (possible_negatives + keras.backend.epsilon())
