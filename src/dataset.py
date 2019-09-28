@@ -253,7 +253,10 @@ class FixedLenGenerator(Generator):
         instances = np.zeros((len(indices), sample_time_steps, channels))
         for ind, (i, j) in enumerate(indices):
             instance = arr[i: j, :]
-            instance = (instance - instance.mean()) / (instance.std() + 0.0001)
+            # instance = (instance - instance.mean()) / (instance.std() + 0.0001)
+            ch_wise_mean = instance.mean(axis=0, keepdims=True)
+            ch_wise_std = instance.std(axis=0, keepdims=True)
+            instance = (instance - ch_wise_mean) / (ch_wise_std + 0.0001)
             instances[ind, :, :] = instance
         return instances
 
@@ -336,6 +339,9 @@ class VarLenGenerator(Generator):
             if end_ind > tsteps:
                 break
             sub_array = subject_data[cursor: end_ind, :]
+            ch_wise_mean = sub_array.mean(axis=0, keepdims=True)
+            ch_wise_std = sub_array.std(axis=0, keepdims=True)
+            sub_array = (sub_array - ch_wise_mean) / (ch_wise_std + 0.00001)
             s_dict[duration].append(sub_array)
             cursor = end_ind
         return s_dict
@@ -377,11 +383,12 @@ class VarLenGenerator(Generator):
                 np.random.shuffle(groups)
                 for j in groups:
                     ind = group_indices[j][i]
-                    x = data_dict[j]['data'][ind[0]: ind[1]]
-                    batch_mean = x.mean(axis=(1, 2), keepdims=True)
-                    batch_std = x.std(axis=(1, 2), keepdims=True, ddof=1)
-                    if not np.all(batch_std):
-                        batch_std = np.where(batch_std > 0, batch_std, 1)
-                    x_batch = (x - batch_mean) / batch_std
+                    # x = data_dict[j]['data'][ind[0]: ind[1]]
+                    # batch_mean = x.mean(axis=(1, 2), keepdims=True)
+                    # batch_std = x.std(axis=(1, 2), keepdims=True, ddof=1)
+                    # if not np.all(batch_std):
+                    #     batch_std = np.where(batch_std > 0, batch_std, 1)
+                    # x_batch = (x - batch_mean) / batch_std
+                    x_batch = data_dict[j]['data'][ind[0]: ind[1]]
                     y_batch = data_dict[j]['labels'][ind[0]: ind[1]]
                     yield x_batch, y_batch
