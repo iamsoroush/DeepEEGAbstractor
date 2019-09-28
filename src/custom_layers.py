@@ -25,9 +25,12 @@ class TemporalAttention(keras.layers.Layer):
     """
 
     def __init__(self,
-                 w_regularizer=None, b_regularizer=None,
-                 w_constraint=None, b_constraint=None,
-                 bias=True, **kwargs):
+                 w_regularizer=None,
+                 b_regularizer=None,
+                 w_constraint=None,
+                 b_constraint=None,
+                 bias=True,
+                 **kwargs):
 
         self.supports_masking = True
         self.init = keras.initializers.get('glorot_uniform')
@@ -94,6 +97,84 @@ class TemporalAttention(keras.layers.Layer):
             kernel: weights
         """
         return keras.backend.squeeze(keras.backend.dot(x, keras.backend.expand_dims(kernel)), axis=-1)
+
+
+class TemporalAttentionV2(keras.layers.Layer):
+
+    def __init__(self,
+                 w_regularizer=None,
+                 b_regularizer=None,
+                 w_constraint=None,
+                 b_constraint=None,
+                 bias=True,
+                 **kwargs):
+
+        self.supports_masking = True
+        self.init = keras.initializers.get('glorot_uniform')
+
+        self.w_regularizer = keras.regularizers.get(w_regularizer)
+        self.b_regularizer = keras.regularizers.get(b_regularizer)
+
+        self.w_constraint = keras.constraints.get(w_constraint)
+        self.b_constraint = keras.constraints.get(b_constraint)
+
+        self.bias = bias
+
+        self.w = None
+        self.b = None
+        super(TemporalAttentionV2, self).__init__(**kwargs)
+
+    def build(self, input_shape):
+        assert len(input_shape) == 3
+
+        n_channels = input_shape[-1]
+        self.w = self.add_weight(shape=(n_channels, n_channels),
+                                 initializer=self.init,
+                                 name='{}_W'.format(self.name),
+                                 regularizer=self.w_regularizer,
+                                 constraint=self.w_constraint)
+        if self.bias:
+            self.b = self.add_weight(shape=(n_channels,),
+                                     initializer='zero',
+                                     name='{}_b'.format(self.name),
+                                     regularizer=self.b_regularizer,
+                                     constraint=self.b_constraint)
+
+        super(TemporalAttentionV2, self).build(input_shape)
+
+    def compute_mask(self, input_tensor, input_mask=None):
+        # do not pass the mask to the next layers
+        return None
+
+    def call(self, x, mask=None):
+        # x: T*D , W: D*D ==> a: T*D
+        a = self._dot_product(x, self.w)
+
+        if self.bias:
+            a += self.b
+
+        a = keras.backend.tanh(a)
+
+        alpha = keras.backend.exp(a)
+        denominator = keras.backend.sum(alpha, axis=-1, keepdims=True) + keras.backend.epsilon()
+        alpha /= denominator
+
+        # x: T*D, alpha: T*1
+        weighted_input = x * alpha
+        return keras.backend.sum(weighted_input, axis=1)
+
+    def compute_output_shape(self, input_shape):
+        return input_shape[0], input_shape[-1]
+
+    @staticmethod
+    def _dot_product(x, kernel):
+        """Wrapper for dot product operation,
+
+        Args:
+            x: input
+            kernel: weights
+        """
+        return keras.backend.dot(x, kernel)
 
 
 class InstanceNorm(keras.layers.Layer):
