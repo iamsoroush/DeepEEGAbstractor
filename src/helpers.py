@@ -174,10 +174,10 @@ class CrossValidator:
         fns = scores[:, 2]
         tps = scores[:, 3]
         acc_vector = (tps + tns) / (tps + fns + fps + tns)
-        prec_vector = tps / (tps + fps)
-        rec_vector = tps / (tps + fns)
-        spec_vector = tns / (tns + fps)
-        fscore_vector = 2 * (prec_vector * rec_vector) / (prec_vector + rec_vector)
+        prec_vector = tps / (tps + fps + 0.001)
+        rec_vector = tps / (tps + fns + 0.001)
+        spec_vector = tns / (tns + fps + 0.001)
+        fscore_vector = 2 * (prec_vector * rec_vector) / (prec_vector + rec_vector + 0.0001)
 
         keys = ['Accuracy', 'F1-Score', 'Sensitivity', 'Specificity']
         fig, ax = plt.subplots(figsize=(20, 8), dpi=dpi)
