@@ -217,6 +217,7 @@ class FixedLenGenerator(Generator):
                       indxs=None):
         if indxs is None:
             x, y = self._generate_data_instances(data, labels)
+            print('     number of instances: ', len(x))
             gen = self._generator(x, y)
             n_iter = len(x) // self.batch_size
         else:
@@ -250,14 +251,17 @@ class FixedLenGenerator(Generator):
         end_indices = start_indices + sample_time_steps
         indices = list(zip(start_indices, end_indices))
 
-        instances = np.zeros((len(indices), sample_time_steps, channels))
+        # instances = np.zeros((len(indices), sample_time_steps, channels))
+        instances = list()
         for ind, (i, j) in enumerate(indices):
             instance = arr[i: j, :]
             # instance = (instance - instance.mean()) / (instance.std() + 0.0001)
             ch_wise_mean = instance.mean(axis=0, keepdims=True)
             ch_wise_std = instance.std(axis=0, keepdims=True)
-            instance = (instance - ch_wise_mean) / (ch_wise_std + 0.0001)
-            instances[ind, :, :] = instance
+            if np.any(ch_wise_std > 100) or np.any(ch_wise_std < 0.01):
+                continue
+            instance = (instance - ch_wise_mean) / ch_wise_std
+            instances.append(instance)
         return instances
 
     def _generator(self,
@@ -341,6 +345,8 @@ class VarLenGenerator(Generator):
             sub_array = subject_data[cursor: end_ind, :]
             ch_wise_mean = sub_array.mean(axis=0, keepdims=True)
             ch_wise_std = sub_array.std(axis=0, keepdims=True)
+            if np.any(ch_wise_std > 150) or np.any(ch_wise_std < 0.01):
+                continue
             sub_array = (sub_array - ch_wise_mean) / (ch_wise_std + 0.00001)
             s_dict[duration].append(sub_array)
             cursor = end_ind
