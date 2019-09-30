@@ -363,6 +363,116 @@ class TIResEEGNet(BaseModel):
         return output_tensor
 
 
+class TemporalDEA(BaseModel):
+
+    """Inception-based network that specially designed for resting state EEG processing.
+
+    This model uses a temporal-inception based convnet for fully spatio-temporal feature extraction in various
+    time scales, and abstracts the raw input signal into a fixed-length vector using a temporal attention mechanism,
+    independent from input signal's length.
+
+    """
+
+    def __init__(self,
+                 input_shape,
+                 model_name='TemporalAbstractor'):
+        super().__init__(input_shape, model_name)
+        self.n_kernels = [10, 8, 6, 4]
+        self.strides = [1, 2, 2, 1]
+        self.pool_size = 2
+        self.pool_stride = 2
+        self.spatial_dropout_rate = 0.2
+        self.dropout_rate = 0.4
+        self.use_bias = False
+        self.kernel_size = 16
+        if keras.backend.image_data_format() != 'channels_last':
+            keras.backend.set_image_data_format('channels_last')
+
+    def create_model(self):
+        input_tensor = keras.layers.Input(shape=self.input_shape_,
+                                          name='input_tensor')
+
+        # Block 1
+        x = self._eeg_filter_bank(input_tensor=input_tensor,
+                                  n_units=self.n_kernels[0],
+                                  strides=self.strides[0])
+        x = keras.layers.AveragePooling1D(pool_size=self.pool_size,
+                                          strides=self.pool_stride)(x)
+
+        # Block 2
+        x = keras.layers.SpatialDropout1D(self.spatial_dropout_rate)(x)
+        x = self._eeg_filter_bank(input_tensor=x,
+                                  n_units=self.n_kernels[1],
+                                  strides=self.strides[1])
+        x = keras.layers.AveragePooling1D(pool_size=self.pool_size,
+                                          strides=self.pool_stride)(x)
+
+        # Block 3
+        x = keras.layers.Dropout(self.dropout_rate)(x)
+        x = self._eeg_filter_bank(input_tensor=x,
+                                  n_units=self.n_kernels[2],
+                                  strides=self.strides[2])
+        x = keras.layers.AveragePooling1D(pool_size=self.pool_size,
+                                          strides=self.pool_stride)(x)
+
+        # Block 3
+        x = keras.layers.Dropout(self.dropout_rate)(x)
+        x = self._eeg_filter_bank(input_tensor=x,
+                                  n_units=self.n_kernels[3],
+                                  strides=self.strides[3])
+
+        # Temporal abstraction
+        x = keras.layers.GlobalAveragePooling1D()(x)
+
+        # Logistic regression unit
+        output_tensor = keras.layers.Dense(1, activation='sigmoid', name='output')(x)
+
+        model = keras.Model(input_tensor, output_tensor)
+        self.model_ = model
+        return model
+
+    def _eeg_filter_bank(self, input_tensor, n_units, strides):
+        branch_a = self._conv1d(input_tensor=input_tensor,
+                                filters=n_units,
+                                kernel_size=1,
+                                dilation_rate=1,
+                                strides=1)
+        branch_a = self._conv1d(input_tensor=branch_a,
+                                filters=n_units,
+                                kernel_size=self.kernel_size,
+                                dilation_rate=1,
+                                strides=strides)
+
+        branch_b = self._conv1d(input_tensor=input_tensor,
+                                filters=n_units,
+                                kernel_size=self.kernel_size // 2,
+                                dilation_rate=2,
+                                strides=strides)
+
+        branch_c = self._conv1d(input_tensor=input_tensor,
+                                filters=n_units,
+                                kernel_size=self.kernel_size // 4,
+                                dilation_rate=4,
+                                strides=strides)
+
+        output = keras.layers.concatenate([branch_a, branch_b, branch_c], axis=-1)
+        return output
+
+    def _conv1d(self, input_tensor, filters, kernel_size, dilation_rate, strides):
+        out = keras.layers.Conv1D(filters=filters,
+                                  kernel_size=kernel_size,
+                                  strides=strides,
+                                  padding='same',
+                                  data_format='channels_last',
+                                  dilation_rate=dilation_rate,
+                                  activation=None,
+                                  use_bias=self.use_bias)(input_tensor)
+        out = InstanceNorm(mean=0,
+                           stddev=1)(out)
+        out = keras.layers.ELU()(out)
+        return out
+
+
 class TemporalInceptionResnet(BaseModel):
 
     # TODO: add pruning
