@@ -241,8 +241,8 @@ class FixedLenGenerator(Generator):
         return x, y
 
     def _generate_instances(self, arr):
-        sample_time_steps = self.duration * self.sampling_rate
-        overlap_time_steps = self.overlap * self.sampling_rate
+        sample_time_steps = int(self.duration * self.sampling_rate)
+        overlap_time_steps = int(self.overlap * self.sampling_rate)
         start_steps = sample_time_steps - overlap_time_steps
 
         tsteps, channels = arr.shape
