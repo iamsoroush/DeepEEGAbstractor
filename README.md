@@ -1,8 +1,8 @@
 # Deep EEG Abstractor (D-EEG-A)
 
 Do the following:
-1. Create a copy from *make_data.ipynp* in your google drive.
-2. Run all cells within *Copy of make_data.ipynb* one-by-one.
+1. Create a copy from *prepare_data.ipynp* in your google drive.
+2. Run all cells within *Copy of prepare_data.ipynb* one-by-one.
 2. Create a copy from a *cv_....ipynb* file in your google drive.
 4. Run cells one-by-one, and you got the results!
 
