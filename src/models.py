@@ -11,12 +11,8 @@ Instantiate your desired model and fit, evaluate, and predict using that:
 Available models:
     1. Conv2DModel
     2. ESTCNNModel
-    3. MCDCNNModel
-    4. LSTMModel
-    5. MLSTMFCNModel
-    6. TimeSeriesEncoder
-    7. EEGNet
-    7. Proposed Model: DeepEEGAbstractor
+    3. EEGNet
+    4. Proposed Model: DeepEEGAbstractor
 """
 # Author: Soroush Moazed <soroush.moazed@gmail.com>
 
@@ -26,7 +22,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.manifold import TSNE
 
-from .custom_layers import InstanceNorm, TemporalAttention
+from .custom_layers import InstanceNorm, TemporalAttention, TemporalAttentionV2, TemporalAttentionV3
 
 import tensorflow as tf
 
@@ -591,7 +587,8 @@ class DeepEEGAbstractor(BaseModel):
                  use_bias=True,
                  dilation_rate=4,
                  kernel_size=8,
-                 activation='elu'):
+                 activation='elu',
+                 attention_type='v1'):
         super().__init__(input_shape, model_name)
         self.lightweight = lightweight
         self.units = units
@@ -601,6 +598,7 @@ class DeepEEGAbstractor(BaseModel):
         self.dilation_rate = dilation_rate
         self.kernel_size = kernel_size
         self.activation = activation
+        self.attention_type = attention_type
         if keras.backend.image_data_format() != 'channels_last':
             keras.backend.set_image_data_format('channels_last')
 
@@ -631,7 +629,12 @@ class DeepEEGAbstractor(BaseModel):
                                               strides=self.pool_size)(x)
 
         # Attention layer
-        x = TemporalAttention(name='embedding')(x)
+        if self.attention_type == 'v1':
+            x = TemporalAttention(name='embedding')(x)
+        elif self.attention_type == 'v2':
+            x = TemporalAttentionV2(name='embedding')(x)
+        else:
+            x = TemporalAttentionV3(name='embedding')(x)
 
         # Logistic regression unit
         output_tensor = keras.layers.Dense(1, activation='sigmoid', name='output')(x)
