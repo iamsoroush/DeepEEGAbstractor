@@ -120,6 +120,9 @@ class CrossValidator:
                                                  test_ind)
                     np.save(file_path, scores)
         final_scores = self._generate_final_scores()
+        self.plot_channel_drop_roc()
+        self.plot_scores()
+        self.plot_subject_wise_scores()
         return final_scores
 
     def plot_scores(self, dpi=80):
