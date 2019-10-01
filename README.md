@@ -1,13 +1,10 @@
 # Deep EEG Abstractor (D-EEG-A)
 
 Do the following:
-1. Download dataset from [here](https://figshare.com/articles/EEG_Data_New/4244171).
-2. Place the downloaded dataset in your google drive.
-2. Make numpy arrays from .edf files and place them under _data_path_ using following code:
-
-3. Open a notebook from _notebooks_ folder in google colab.
-4. Run the notebook cell-by-cell.
-5. And now you have the results!
+1. Create a copy from [*prepare_data*](https://github.com/iamsoroush/DeepEEGAbstractor/blob/master/prepare_data.ipynb) in your google drive.
+2. Run all cells within *Copy of prepare_data.ipynb* one-by-one.
+2. Create a copy from a *cv_....ipynb* file in your google drive.
+4. Run cells one-by-one, and you got the results!
 
 
 # Results
