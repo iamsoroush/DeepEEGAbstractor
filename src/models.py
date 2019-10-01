@@ -483,7 +483,7 @@ class TemporalInceptionResnet(BaseModel):
                  lightweight=False,
                  units=(10, 8, 6),
                  dropout_rate=0.1,
-                 pool_size=4,
+                 pool_size=2,
                  use_bias=True,
                  dilation_rate=4,
                  kernel_size=8,
@@ -517,7 +517,7 @@ class TemporalInceptionResnet(BaseModel):
 
         # Block 2 - n
         for n_units in self.units[1:]:
-            x = keras.layers.SpatialDropout1D(self.dropout_rate / 2)(x)
+            x = keras.layers.SpatialDropout1D(self.dropout_rate)(x)
             y = self._dilated_inception(x,
                                         n_units=n_units)
             if not self.lightweight:
@@ -587,7 +587,7 @@ class DeepEEGAbstractor(BaseModel):
                  lightweight=False,
                  units=(10, 8, 6),
                  dropout_rate=0.1,
-                 pool_size=4,
+                 pool_size=2,
                  use_bias=True,
                  dilation_rate=4,
                  kernel_size=8,
@@ -620,7 +620,7 @@ class DeepEEGAbstractor(BaseModel):
 
         # Block 2 - n
         for n_units in self.units[1:]:
-            x = keras.layers.SpatialDropout1D(self.dropout_rate / 2)(x)
+            x = keras.layers.SpatialDropout1D(self.dropout_rate)(x)
             y = self._dilated_inception(x,
                                         n_units=n_units)
             if not self.lightweight:
