@@ -350,14 +350,14 @@ class CrossValidator:
             indx = np.where(subject_ids == s_id)[0]
             x_subject = x_test[indx]
             y_subjects.append(int(y_test[indx][0]))
-            # y_pred_proba = model.predict(x_subject).mean()
-            # y_preds.append(int(np.where(y_pred_proba > 0.5, 1, 0)))
-            y_pred_proba = model.predict(x_subject)
-            y_pred = np.where(y_pred_proba > 0.5, 1, 0).mean()
-            if y_pred >= 0.5:
-                y_preds.append(1)
-            else:
-                y_preds.append(0)
+            y_pred_proba = model.predict(x_subject).mean()
+            y_preds.append(int(np.where(y_pred_proba > 0.5, 1, 0)))
+            # y_pred_proba = model.predict(x_subject)
+            # y_pred = np.where(y_pred_proba > 0.5, 1, 0).mean()
+            # if y_pred >= 0.5:
+            #     y_preds.append(1)
+            # else:
+            #     y_preds.append(0)
         tn, fp, fn, tp = confusion_matrix(y_subjects, y_preds).ravel()
         return np.array([tn, fp, fn, tp])
 
