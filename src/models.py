@@ -481,12 +481,13 @@ class TemporalInceptionResnet(BaseModel):
                  input_shape,
                  model_name='deega-gap',
                  lightweight=False,
-                 units=(6, 8, 10),
+                 units=(10, 8, 6),
                  dropout_rate=0.1,
                  pool_size=4,
                  use_bias=True,
                  dilation_rate=4,
-                 kernel_size=8):
+                 kernel_size=8,
+                 activation='elu'):
         super().__init__(input_shape, model_name)
         self.lightweight = lightweight
         self.units = units
@@ -495,6 +496,7 @@ class TemporalInceptionResnet(BaseModel):
         self.use_bias = use_bias
         self.dilation_rate = dilation_rate
         self.kernel_size = kernel_size
+        self.activation = activation
         if keras.backend.image_data_format() != 'channels_last':
             keras.backend.set_image_data_format('channels_last')
 
@@ -566,9 +568,12 @@ class TemporalInceptionResnet(BaseModel):
                                   dilation_rate=dilation_rate,
                                   activation=None,
                                   use_bias=self.use_bias)(x)
-        out = InstanceNorm(mean=0,
-                           stddev=1)(out)
-        out = keras.layers.ELU()(out)
+        if self.activation == 'elu':
+            out = InstanceNorm(mean=0, stddev=1.0)(out)
+            out = keras.layers.ELU()(out)
+        elif self.activation == 'relu':
+            out = InstanceNorm(mean=0.5, stddev=0.5)(out)
+            out = keras.layers.ReLU()(out)
         return out
 
 
@@ -580,12 +585,13 @@ class DeepEEGAbstractor(BaseModel):
                  input_shape,
                  model_name='deep_eeg_abstractor',
                  lightweight=False,
-                 units=(6, 8, 10),
+                 units=(10, 8, 6),
                  dropout_rate=0.1,
                  pool_size=4,
                  use_bias=True,
                  dilation_rate=4,
-                 kernel_size=8):
+                 kernel_size=8,
+                 activation='elu'):
         super().__init__(input_shape, model_name)
         self.lightweight = lightweight
         self.units = units
@@ -594,6 +600,7 @@ class DeepEEGAbstractor(BaseModel):
         self.use_bias = use_bias
         self.dilation_rate = dilation_rate
         self.kernel_size = kernel_size
+        self.activation = activation
         if keras.backend.image_data_format() != 'channels_last':
             keras.backend.set_image_data_format('channels_last')
 
@@ -666,8 +673,12 @@ class DeepEEGAbstractor(BaseModel):
                                   dilation_rate=dilation_rate,
                                   activation=None,
                                   use_bias=self.use_bias)(x)
-        out = InstanceNorm(mean=0, stddev=1.0)(out)
-        out = keras.layers.ELU()(out)
+        if self.activation == 'elu':
+            out = InstanceNorm(mean=0, stddev=1.0)(out)
+            out = keras.layers.ELU()(out)
+        elif self.activation == 'relu':
+            out = InstanceNorm(mean=0.5, stddev=0.5)(out)
+            out = keras.layers.ReLU()(out)
         return out
 
     def generate_embeddings(self, data):
