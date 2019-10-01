@@ -99,6 +99,95 @@ class TemporalAttention(keras.layers.Layer):
         return keras.backend.squeeze(keras.backend.dot(x, keras.backend.expand_dims(kernel)), axis=-1)
 
 
+class TemporalAttentionV3(keras.layers.Layer):
+    """Attention layer for conv1d networks.
+
+    Source paper: arXiv:1512.08756v5
+
+    Summarizes temporal axis and outputs a vector with the same length as channels.
+    Note that the unweighted attention will be simple GlobalAveragePooling1D
+
+    Make sure to pass the inputs to this layer in "channels_last" format.
+
+    use like this at top of a conv1d layer:
+        x = TemporalAttention()(x)
+
+    Note: this version is different from TemporalAttention in normalizing weights of time steps,
+        in this version weights will not normalized to be in range (0, 1). The tanh will be used
+        as activation function of attention neuron.
+    """
+
+    def __init__(self,
+                 w_regularizer=None,
+                 b_regularizer=None,
+                 w_constraint=None,
+                 b_constraint=None,
+                 bias=True,
+                 **kwargs):
+
+        self.supports_masking = True
+        self.init = keras.initializers.get('glorot_uniform')
+
+        self.w_regularizer = keras.regularizers.get(w_regularizer)
+        self.b_regularizer = keras.regularizers.get(b_regularizer)
+
+        self.w_constraint = keras.constraints.get(w_constraint)
+        self.b_constraint = keras.constraints.get(b_constraint)
+
+        self.bias = bias
+
+        self.w = None
+        self.b = None
+        super(TemporalAttentionV3, self).__init__(**kwargs)
+
+    def build(self, input_shape):
+        assert len(input_shape) == 3
+
+        self.w = self.add_weight(shape=(input_shape[-1],),
+                                 initializer=self.init,
+                                 name='{}_W'.format(self.name),
+                                 regularizer=self.w_regularizer,
+                                 constraint=self.w_constraint)
+        if self.bias:
+            self.b = self.add_weight(shape=(1,),
+                                     initializer='zero',
+                                     name='{}_b'.format(self.name),
+                                     regularizer=self.b_regularizer,
+                                     constraint=self.b_constraint)
+
+        super(TemporalAttentionV3, self).build(input_shape)
+
+    def compute_mask(self, input_tensor, input_mask=None):
+        # do not pass the mask to the next layers
+        return None
+
+    def call(self, x, mask=None):
+        # x: T*D , W: D*1 ==> a: T*1
+        a = self._dot_product(x, self.w)
+
+        if self.bias:
+            a += self.b
+
+        a = keras.backend.tanh(a)
+
+        # x: T*D, a: T*1
+        weighted_input = x * keras.backend.expand_dims(a)
+        return keras.backend.sum(weighted_input, axis=1)
+
+    def compute_output_shape(self, input_shape):
+        return input_shape[0], input_shape[-1]
+
+    @staticmethod
+    def _dot_product(x, kernel):
+        """Wrapper for dot product operation,
+
+        Args:
+            x: input
+            kernel: weights
+        """
+        return keras.backend.squeeze(keras.backend.dot(x, keras.backend.expand_dims(kernel)), axis=-1)
+
+
 class TemporalAttentionV2(keras.layers.Layer):
 
     def __init__(self,
