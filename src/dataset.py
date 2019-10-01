@@ -220,7 +220,7 @@ class FixedLenGenerator(Generator):
             if self.is_train:
                 print('   training instances: ', len(x))
             else:
-                print('   test instances: ', len(x))
+                print('   test instances:     ', len(x))
             gen = self._generator(x, y)
             n_iter = len(x) // self.batch_size
         else:
