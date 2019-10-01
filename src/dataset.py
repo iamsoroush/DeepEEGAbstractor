@@ -258,7 +258,7 @@ class FixedLenGenerator(Generator):
             # instance = (instance - instance.mean()) / (instance.std() + 0.0001)
             ch_wise_mean = instance.mean(axis=0, keepdims=True)
             ch_wise_std = instance.std(axis=0, keepdims=True)
-            if np.any(ch_wise_std > 100) or np.any(ch_wise_std < 0.01):
+            if np.any(ch_wise_std > 60) or np.any(ch_wise_std < 1):
                 continue
             instance = (instance - ch_wise_mean) / ch_wise_std
             instances.append(instance)
@@ -345,7 +345,7 @@ class VarLenGenerator(Generator):
             sub_array = subject_data[cursor: end_ind, :]
             ch_wise_mean = sub_array.mean(axis=0, keepdims=True)
             ch_wise_std = sub_array.std(axis=0, keepdims=True)
-            if np.any(ch_wise_std > 150) or np.any(ch_wise_std < 0.01):
+            if np.any(ch_wise_std > 80) or np.any(ch_wise_std < 1):
                 continue
             sub_array = (sub_array - ch_wise_mean) / (ch_wise_std + 0.00001)
             s_dict[duration].append(sub_array)
