@@ -708,7 +708,8 @@ class SpatioTemporalDFB(BaseModel):
 
     def __init__(self,
                  input_shape,
-                 model_name='ST-DFB-CNN'):
+                 model_name='ST-DFB-CNN',
+                 normalize_kernels=False):
         super().__init__(input_shape, model_name)
         self.n_kernels = [8, 8, 6, 6, 4]
         self.pool_size = 2
@@ -717,7 +718,7 @@ class SpatioTemporalDFB(BaseModel):
         self.dropout_rate = 0.4
         self.use_bias = False
         self.kernel_size = 4
-        self.normalized_kernels = False
+        self.normalized_kernels = normalize_kernels
         if keras.backend.image_data_format() != 'channels_last':
             keras.backend.set_image_data_format('channels_last')
 
