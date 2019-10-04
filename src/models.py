@@ -717,6 +717,7 @@ class SpatioTemporalDFB(BaseModel):
         self.dropout_rate = 0.4
         self.use_bias = False
         self.kernel_size = 4
+        self.normalized_kernels = False
         if keras.backend.image_data_format() != 'channels_last':
             keras.backend.set_image_data_format('channels_last')
 
@@ -794,6 +795,10 @@ class SpatioTemporalDFB(BaseModel):
         return output
 
     def _conv1d(self, input_tensor, filters, kernel_size, dilation_rate, strides):
+        if self.normalized_kernels:
+            norm = keras.constraints.UnitNorm(axis=(0, 1))
+        else:
+            norm = None
         out = keras.layers.Conv1D(filters=filters,
                                   kernel_size=kernel_size,
                                   strides=strides,
@@ -801,9 +806,11 @@ class SpatioTemporalDFB(BaseModel):
                                   data_format='channels_last',
                                   dilation_rate=dilation_rate,
                                   activation=None,
-                                  use_bias=self.use_bias)(input_tensor)
-        out = InstanceNorm(mean=0,
-                           stddev=1)(out)
+                                  use_bias=self.use_bias,
+                                  kernel_constraint=norm)(input_tensor)
+        if norm is None:
+            out = InstanceNorm(mean=0,
+                               stddev=1)(out)
         out = keras.layers.ELU()(out)
         return out
 
