@@ -270,29 +270,23 @@ class EEGNet(BaseModel):
         return model
 
 
-class SpatioTemporalDFB(BaseModel):
+class SpatioTemporalWFB(BaseModel):
 
-    """Spatio-Temporal Dilated Filter Bank CNN.
-
-    Inception-based network that specially designed for resting state EEG processing.
-
-    This model uses a temporal-inception based conv-net for fully spatio-temporal feature extraction in various
-    time scales, and abstracts the raw input signal into a fixed-length vector using a temporal attention mechanism,
-    independent from input signal's length.
+    """Spatio-Temporal Windowed Filter Bank CNN.
 
     The design is based on STFT, i.e. each layer consists of equal length filters that extract features in different
      frequencies.
 
-    Receptive field of each unit before GAP layer is 617 time-steps, about 2.5 seconds with sampling rate of 256, i.e.
-     each unit looks at 2.5 seconds of input multi-variate time-series.
+    Receptive field of each unit before GAP layer is 306 time-steps, about 1.25 seconds with sampling rate of 256, i.e.
+     each unit looks at 1.25 seconds of input multi-variate time-series.
     """
 
     def __init__(self,
                  input_shape,
-                 model_name='ST-DFB-CNN'):
+                 model_name='ST-WFB-CNN'):
         super().__init__(input_shape, model_name)
-        self.n_kernels = [8, 6, 6, 4]
-        self.strides = [1, 2, 2, 1]
+        self.n_kernels = [8, 6, 4]
+        self.strides = [2, 2, 1]
         self.pool_size = 2
         self.pool_stride = 2
         self.spatial_dropout_rate = 0.2
@@ -382,16 +376,16 @@ class SpatioTemporalDFB(BaseModel):
         return out
 
 
-class TemporalDFB(BaseModel):
+class TemporalWFB(BaseModel):
 
-    """Temporal Dilated Filter Bank CNN.
+    """Temporal Windowed Filter Bank CNN.
 
         The design is based on STFT, i.e. first layer extracts multiple temporal features in multiple scales from input
-         in fixed-sized windows, which are optimized by using the error signal of all channels. Then for ezh channel a
+         in fixed-sized windows, which are optimized by using the error signal of all channels. Then for each channel a
          specific combination of features is created, and two layers of spatio-temporal 1D convolutional layers are used
          for generating final representations by combination of channels' representations. This final representations
-         will be passed to a Global Average Pooling layer which abstracts the temporal dimension before making prediction
-         through a sigmoid unit.
+         will be passed to a Global Average Pooling layer which abstracts the temporal dimension before making
+         prediction through a sigmoid unit.
 
         Receptive field of each unit before GAP layer is 226 time-steps, about 1 second with sampling rate of 256, i.e.
          each unit looks at 1 second of input multi-variate time-series.
@@ -399,21 +393,29 @@ class TemporalDFB(BaseModel):
 
     def __init__(self,
                  input_shape,
-                 model_name='T-DFB-CNN'):
+                 model_name='T-WFB-CNN'):
         super().__init__(input_shape, model_name)
-        self.n_init_kernels = 8
-        self.strides = [1, 2, 2, 1]
+        self.wfb_kernel_length = 32
+        self.wfb_kernel_units = 8
+        self.wfb_kernel_strides = 2
+        self.sdropout_rate = 0.2
         self.pool_size = 2
-        self.pool_stride = 2
-        self.spatial_dropout_rate = 0.2
+        self.pool_strides = 2
+        self.channel_wise_layer_kernel_length = 4
+        self.channel_wise_layer_n_kernel = 1
+        self.channel_wise_layer_strides = 1
         self.dropout_rate = 0.4
+        self.st_1_kernel_length = 8
+        self.st_1_n_kernel = 16
+        self.st_1_strides = 1
+        self.st_2_kernel_length = 8
+        self.st_2_n_kernel = 10
+        self.st_2_strides = 1
         self.use_bias = False
-        self.kernel_size = 16
         if keras.backend.image_data_format() != 'channels_last':
             keras.backend.set_image_data_format('channels_last')
 
     def create_model(self):
-        time_steps, channels = self.input_shape_
         input_tensor = keras.layers.Input(shape=self.input_shape_)
         permuted_input = keras.layers.Permute((2, 1))(input_tensor)
         permuted_input = keras.layers.Lambda(keras.backend.expand_dims,
@@ -422,38 +424,39 @@ class TemporalDFB(BaseModel):
 
         # Block 1: Temporal dilated filter-bank for initial feature extraction
         block_1 = self._temporal_dilated_filter_bank(input_tensor=permuted_input,
-                                                     n_units=self.n_init_kernels,
-                                                     strides=2)
-        block_1 = keras.layers.SpatialDropout2D(0.2)(block_1)
-        block_1 = keras.layers.Permute((3, 1))(block_1) # out[:, :, -1] is representation of a unique input channel
-        block_1 = keras.layers.AveragePooling2D(pool_size=(1, 2),
-                                                strides=(1, 2))(block_1)
+                                                     n_units=self.wfb_kernel_units,
+                                                     strides=self.wfb_kernel_strides)
+        block_1 = keras.layers.SpatialDropout2D(self.sdropout_rate)(block_1)
+        block_1 = keras.layers.Permute((3, 1))(block_1)  # out[:, :, -1] is representation of a unique input channel
+        block_1 = keras.layers.AveragePooling2D(pool_size=(1, self.pool_size),
+                                                strides=(1, self.pool_strides))(block_1)
 
         # Block 2: Make single signal out of each channel's new representations
         block_2 = self._channel_wise_mixing(input_tensor=block_1,
-                                            n_features=self.n_init_kernels * 4,
-                                            kernel_length=4,
-                                            strides=1,
-                                            n_kernel=1)
+                                            kernel_length=self.channel_wise_layer_kernel_length,
+                                            strides=self.channel_wise_layer_strides,
+                                            n_kernel=self.channel_wise_layer_n_kernel)
         block_2 = keras.layers.Lambda(keras.backend.squeeze,
                                       arguments={'axis': 1},
                                       name='squeezed_block_2')(block_2)
-        block_2 = keras.layers.AveragePooling1D(pool_size=2, strides=2)(block_2)
+        block_2 = keras.layers.AveragePooling1D(pool_size=self.pool_size,
+                                                strides=self.pool_strides)(block_2)
 
         # Block 3: Spatio-temporal mixing of channels
-        block_3 = keras.layers.SpatialDropout1D(0.2)(block_2)
+        block_3 = keras.layers.SpatialDropout1D(self.sdropout_rate)(block_2)
         block_3 = self._st_conv1d(input_tensor=block_3,
-                                  n_units=10,
-                                  kernel_length=8,
-                                  strides=1)
-        block_3 = keras.layers.AveragePooling1D(pool_size=2, strides=2)(block_3)
+                                  n_units=self.st_1_n_kernel,
+                                  kernel_length=self.st_1_kernel_length,
+                                  strides=self.st_1_strides)
+        block_3 = keras.layers.AveragePooling1D(pool_size=self.pool_size,
+                                                strides=self.pool_strides)(block_3)
 
         # Block 4
-        block_4 = keras.layers.Dropout(0.4)(block_3)
+        block_4 = keras.layers.Dropout(self.dropout_rate)(block_3)
         block_4 = self._st_conv1d(input_tensor=block_4,
-                                  n_units=6,
-                                  kernel_length=8,
-                                  strides=1)
+                                  n_units=self.st_2_n_kernel,
+                                  kernel_length=self.st_2_kernel_length,
+                                  strides=self.st_2_strides)
 
         # Temporal abstraction
         gap = keras.layers.GlobalAveragePooling1D()(block_4)
@@ -469,22 +472,22 @@ class TemporalDFB(BaseModel):
     def _temporal_dilated_filter_bank(self, input_tensor, n_units, strides):
         branch_a = self._temporal_conv1d(input_tensor=input_tensor,
                                          n_units=n_units,
-                                         kernel_length=32,
+                                         kernel_length=self.wfb_kernel_length,
                                          strides=strides,
                                          dilation_rate=1)
         branch_b = self._temporal_conv1d(input_tensor=input_tensor,
                                          n_units=n_units,
-                                         kernel_length=16,
+                                         kernel_length=self.wfb_kernel_length // 2,
                                          strides=strides,
                                          dilation_rate=2)
         branch_c = self._temporal_conv1d(input_tensor=input_tensor,
                                          n_units=n_units,
-                                         kernel_length=8,
+                                         kernel_length=self.wfb_kernel_length // 4,
                                          strides=strides,
                                          dilation_rate=4)
         branch_d = self._temporal_conv1d(input_tensor=input_tensor,
                                          n_units=n_units,
-                                         kernel_length=4,
+                                         kernel_length=self.wfb_kernel_length // 8,
                                          strides=strides,
                                          dilation_rate=8)
         output = keras.layers.concatenate([branch_a, branch_b, branch_c, branch_d], axis=-1)
@@ -518,7 +521,8 @@ class TemporalDFB(BaseModel):
         out = keras.layers.Activation('elu')(x)
         return out
 
-    def _channel_wise_mixing(self, input_tensor, n_features, kernel_length, strides, n_kernel):
+    def _channel_wise_mixing(self, input_tensor, kernel_length, strides, n_kernel):
+        n_features = keras.backend.int_shape(input_tensor)[-3]
         x = keras.layers.DepthwiseConv2D(kernel_size=(n_features, kernel_length),
                                          strides=(1, strides),
                                          padding='valid',
@@ -528,6 +532,279 @@ class TemporalDFB(BaseModel):
                                          use_bias=self.use_bias)(input_tensor)
         x = InstanceNorm(axis=-1, mean=0, stddev=1.0)(x)
         out = keras.layers.Activation('elu')(x)
+        return out
+
+
+class TemporalDFB(BaseModel):
+
+    """Temporal Dilated Filter Bank CNN.
+
+            The design is based on DWT, i.e. first layer extracts multiple temporal features in multiple
+             scales from input in multiple context sizes, which are optimized by using the error signal
+             of all channels. Then for each channel a specific combination of features is created, and
+             two layers of spatio-temporal 1D convolutional layers are used for generating final representations
+             by combination of channels' representations. This final representations will be passed to a
+             Global Average Pooling layer which abstracts the temporal dimension before making
+             prediction through a sigmoid unit.
+
+            Receptive field of each unit before GAP layer is 322 time-steps, about 1.25 second with sampling rate of 256, i.e.
+             each unit looks at 1 second of input multi-variate time-series.
+        """
+
+    def __init__(self,
+                 input_shape,
+                 model_name='T-DFB-CNN'):
+        super().__init__(input_shape, model_name)
+        self.dfb_kernel_length = 16
+        self.dfb_kernel_units = 8
+        self.dfb_kernel_strides = 2
+        self.sdropout_rate = 0.2
+        self.pool_size = 2
+        self.pool_strides = 2
+        self.channel_wise_layer_kernel_length = 4
+        self.channel_wise_layer_n_kernel = 1
+        self.channel_wise_layer_strides = 1
+        self.dropout_rate = 0.4
+        self.st_1_kernel_length = 8
+        self.st_1_n_kernel = 16
+        self.st_1_strides = 1
+        self.st_2_kernel_length = 8
+        self.st_2_n_kernel = 10
+        self.st_2_strides = 1
+        self.use_bias = False
+        if keras.backend.image_data_format() != 'channels_last':
+            keras.backend.set_image_data_format('channels_last')
+
+    def create_model(self):
+        input_tensor = keras.layers.Input(shape=self.input_shape_)
+        permuted_input = keras.layers.Permute((2, 1))(input_tensor)
+        permuted_input = keras.layers.Lambda(keras.backend.expand_dims,
+                                             arguments={'axis': -1},
+                                             name='permuted_input')(permuted_input)
+
+        # Block 1: Temporal dilated filter-bank for initial feature extraction
+        block_1 = self._st_dilated_filter_bank(input_tensor=permuted_input,
+                                               n_units=self.dfb_kernel_units,
+                                               strides=self.dfb_kernel_strides)
+        block_1 = keras.layers.SpatialDropout2D(self.sdropout_rate)(block_1)
+        block_1 = keras.layers.Permute((3, 1))(block_1)  # out[:, :, -1] is representation of a unique input channel
+        block_1 = keras.layers.AveragePooling2D(pool_size=(1, self.pool_size),
+                                                strides=(1, self.pool_strides))(block_1)
+
+        # Block 2: Make single signal out of each channel's new representations
+        block_2 = self._channel_wise_mixing(input_tensor=block_1,
+                                            kernel_length=self.channel_wise_layer_kernel_length,
+                                            strides=self.channel_wise_layer_strides,
+                                            n_kernel=self.channel_wise_layer_n_kernel)
+        block_2 = keras.layers.Lambda(keras.backend.squeeze,
+                                      arguments={'axis': 1},
+                                      name='squeezed_block_2')(block_2)
+        block_2 = keras.layers.AveragePooling1D(pool_size=self.pool_size,
+                                                strides=self.pool_strides)(block_2)
+
+        # Block 3: Spatio-temporal mixing of channels
+        block_3 = keras.layers.SpatialDropout1D(self.sdropout_rate)(block_2)
+        block_3 = self._st_conv1d(input_tensor=block_3,
+                                  n_units=self.st_1_n_kernel,
+                                  kernel_length=self.st_1_kernel_length,
+                                  strides=self.st_1_strides)
+        block_3 = keras.layers.AveragePooling1D(pool_size=self.pool_size,
+                                                strides=self.pool_strides)(block_3)
+
+        # Block 4
+        block_4 = keras.layers.Dropout(self.dropout_rate)(block_3)
+        block_4 = self._st_conv1d(input_tensor=block_4,
+                                  n_units=self.st_2_n_kernel,
+                                  kernel_length=self.st_2_kernel_length,
+                                  strides=self.st_2_strides)
+
+        # Temporal abstraction
+        gap = keras.layers.GlobalAveragePooling1D()(block_4)
+
+        # Prediction
+        output_tensor = keras.layers.Dense(units=1, activation='sigmoid', name='output')(gap)
+
+        model = keras.Model(input_tensor, output_tensor)
+        self.model_ = model
+
+        return model
+
+    def _st_dilated_filter_bank(self, input_tensor, n_units, strides):
+        branch_a = self._temporal_conv1d(input_tensor=input_tensor,
+                                         n_units=n_units,
+                                         kernel_length=self.dfb_kernel_length,
+                                         strides=strides,
+                                         dilation_rate=1)
+        branch_b = self._temporal_conv1d(input_tensor=input_tensor,
+                                         n_units=n_units,
+                                         kernel_length=self.dfb_kernel_length,
+                                         strides=strides,
+                                         dilation_rate=2)
+        branch_c = self._temporal_conv1d(input_tensor=input_tensor,
+                                         n_units=n_units,
+                                         kernel_length=self.dfb_kernel_length,
+                                         strides=strides,
+                                         dilation_rate=4)
+        branch_d = self._temporal_conv1d(input_tensor=input_tensor,
+                                         n_units=n_units,
+                                         kernel_length=self.dfb_kernel_length,
+                                         strides=strides,
+                                         dilation_rate=8)
+        output = keras.layers.concatenate([branch_a, branch_b, branch_c, branch_d], axis=-1)
+        return output
+
+    def _temporal_conv1d(self, input_tensor, n_units, kernel_length, strides, dilation_rate):
+        x = keras.layers.Conv2D(filters=n_units,
+                                kernel_size=(1, kernel_length),
+                                strides=(1, strides),
+                                padding='same',
+                                data_format='channels_last',
+                                dilation_rate=(1, dilation_rate),
+                                activation=None,
+                                use_bias=self.use_bias)(input_tensor)
+
+        # Normalize outputs: normalize each input channel
+        x = InstanceNorm(axis=1, mean=0, stddev=1.0)(x)
+
+        out = keras.layers.Activation('elu')(x)
+        return out
+
+    def _st_conv1d(self, input_tensor, n_units, kernel_length, strides):
+        x = keras.layers.Conv1D(filters=n_units,
+                                kernel_size=kernel_length,
+                                strides=strides,
+                                padding='valid',
+                                data_format='channels_last',
+                                dilation_rate=1,
+                                activation=None)(input_tensor)
+        x = InstanceNorm(axis=-1, mean=0, stddev=1.0)(x)
+        out = keras.layers.Activation('elu')(x)
+        return out
+
+    def _channel_wise_mixing(self, input_tensor, kernel_length, strides, n_kernel):
+        n_features = keras.backend.int_shape(input_tensor)[-3]
+        x = keras.layers.DepthwiseConv2D(kernel_size=(n_features, kernel_length),
+                                         strides=(1, strides),
+                                         padding='valid',
+                                         depth_multiplier=n_kernel,
+                                         data_format='channels_last',
+                                         activation=None,
+                                         use_bias=self.use_bias)(input_tensor)
+        x = InstanceNorm(axis=-1, mean=0, stddev=1.0)(x)
+        out = keras.layers.Activation('elu')(x)
+        return out
+
+
+class SpatioTemporalDFB(BaseModel):
+
+    """Spatio-Temporal Windowed Filter Bank CNN.
+
+        The design is based on DWT, i.e. each layer consists of dilated filters that extract features in different
+         frequencies and different contexts.
+
+        Receptive field of each unit before GAP layer is 481 time-steps, about 2 seconds with sampling rate of 256, i.e.
+         each unit looks at 2 seconds of input multi-variate time-series.
+    """
+
+    def __init__(self,
+                 input_shape,
+                 model_name='ST-DFB-CNN'):
+        super().__init__(input_shape, model_name)
+        self.n_kernels = [8, 8, 6, 6, 4]
+        self.pool_size = 2
+        self.pool_stride = 2
+        self.spatial_dropout_rate = 0.2
+        self.dropout_rate = 0.4
+        self.use_bias = False
+        self.kernel_size = 4
+        if keras.backend.image_data_format() != 'channels_last':
+            keras.backend.set_image_data_format('channels_last')
+
+    def create_model(self):
+        input_tensor = keras.layers.Input(shape=self.input_shape_,
+                                          name='input_tensor')
+
+        # Block 1
+        x = self._eeg_filter_bank(input_tensor=input_tensor,
+                                  n_units=self.n_kernels[0],
+                                  strides=1)
+        x = keras.layers.AveragePooling1D(pool_size=self.pool_size,
+                                          strides=self.pool_stride)(x)
+
+        # Block 2
+        x = keras.layers.SpatialDropout1D(self.spatial_dropout_rate)(x)
+        x = self._eeg_filter_bank(input_tensor=x,
+                                  n_units=self.n_kernels[1],
+                                  strides=1)
+        x = keras.layers.AveragePooling1D(pool_size=self.pool_size,
+                                          strides=self.pool_stride)(x)
+
+        # Block 3
+        x = keras.layers.Dropout(self.dropout_rate)(x)
+        x = self._eeg_filter_bank(input_tensor=x,
+                                  n_units=self.n_kernels[2],
+                                  strides=1)
+        x = keras.layers.AveragePooling1D(pool_size=self.pool_size,
+                                          strides=self.pool_stride)(x)
+
+        # Block 4
+        x = keras.layers.Dropout(self.dropout_rate)(x)
+        x = self._eeg_filter_bank(input_tensor=x,
+                                  n_units=self.n_kernels[3],
+                                  strides=1)
+        x = keras.layers.AveragePooling1D(pool_size=self.pool_size,
+                                          strides=self.pool_stride)(x)
+
+        # Block 5
+        x = keras.layers.Dropout(self.dropout_rate)(x)
+        x = self._eeg_filter_bank(input_tensor=x,
+                                  n_units=self.n_kernels[4],
+                                  strides=1)
+
+        # Temporal abstraction
+        x = keras.layers.GlobalAveragePooling1D()(x)
+
+        # Logistic regression unit
+        output_tensor = keras.layers.Dense(1, activation='sigmoid', name='output')(x)
+
+        model = keras.Model(input_tensor, output_tensor)
+        self.model_ = model
+        return model
+
+    def _eeg_filter_bank(self, input_tensor, n_units, strides):
+        branch_a = self._conv1d(input_tensor=input_tensor,
+                                filters=n_units,
+                                kernel_size=self.kernel_size,
+                                dilation_rate=1,
+                                strides=strides)
+
+        branch_b = self._conv1d(input_tensor=input_tensor,
+                                filters=n_units,
+                                kernel_size=self.kernel_size,
+                                dilation_rate=2,
+                                strides=strides)
+
+        branch_c = self._conv1d(input_tensor=input_tensor,
+                                filters=n_units,
+                                kernel_size=self.kernel_size,
+                                dilation_rate=4,
+                                strides=strides)
+
+        output = keras.layers.concatenate([branch_a, branch_b, branch_c], axis=-1)
+        return output
+
+    def _conv1d(self, input_tensor, filters, kernel_size, dilation_rate, strides):
+        out = keras.layers.Conv1D(filters=filters,
+                                  kernel_size=kernel_size,
+                                  strides=strides,
+                                  padding='same',
+                                  data_format='channels_last',
+                                  dilation_rate=dilation_rate,
+                                  activation=None,
+                                  use_bias=self.use_bias)(input_tensor)
+        out = InstanceNorm(mean=0,
+                           stddev=1)(out)
+        out = keras.layers.ELU()(out)
         return out
 
 
