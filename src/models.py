@@ -285,8 +285,8 @@ class SpatioTemporalWFB(BaseModel):
                  input_shape,
                  model_name='ST-WFB-CNN'):
         super().__init__(input_shape, model_name)
-        self.n_kernels = [8, 6, 4]
-        self.strides = [2, 2, 1]
+        self.n_kernels = [8, 6, 6, 4]
+        self.strides = [1, 1, 1, 1]
         self.pool_size = 2
         self.pool_stride = 2
         self.spatial_dropout_rate = 0.2
@@ -397,7 +397,7 @@ class TemporalWFB(BaseModel):
         super().__init__(input_shape, model_name)
         self.wfb_kernel_length = 32
         self.wfb_kernel_units = 8
-        self.wfb_kernel_strides = 2
+        self.wfb_kernel_strides = 1
         self.sdropout_rate = 0.2
         self.pool_size = 2
         self.pool_strides = 2
@@ -427,7 +427,7 @@ class TemporalWFB(BaseModel):
                                                      n_units=self.wfb_kernel_units,
                                                      strides=self.wfb_kernel_strides)
         block_1 = keras.layers.SpatialDropout2D(self.sdropout_rate)(block_1)
-        block_1 = keras.layers.Permute((3, 1))(block_1)  # out[:, :, -1] is representation of a unique input channel
+        block_1 = keras.layers.Permute((3, 2, 1))(block_1)  # out[:, :, -1] is representation of a unique input channel
         block_1 = keras.layers.AveragePooling2D(pool_size=(1, self.pool_size),
                                                 strides=(1, self.pool_strides))(block_1)
 
@@ -557,7 +557,7 @@ class TemporalDFB(BaseModel):
         super().__init__(input_shape, model_name)
         self.dfb_kernel_length = 16
         self.dfb_kernel_units = 8
-        self.dfb_kernel_strides = 2
+        self.dfb_kernel_strides = 1
         self.sdropout_rate = 0.2
         self.pool_size = 2
         self.pool_strides = 2
@@ -587,7 +587,7 @@ class TemporalDFB(BaseModel):
                                                n_units=self.dfb_kernel_units,
                                                strides=self.dfb_kernel_strides)
         block_1 = keras.layers.SpatialDropout2D(self.sdropout_rate)(block_1)
-        block_1 = keras.layers.Permute((3, 1))(block_1)  # out[:, :, -1] is representation of a unique input channel
+        block_1 = keras.layers.Permute((3, 2, 1))(block_1)  # out[:, :, -1] is representation of a unique input channel
         block_1 = keras.layers.AveragePooling2D(pool_size=(1, self.pool_size),
                                                 strides=(1, self.pool_strides))(block_1)
 
