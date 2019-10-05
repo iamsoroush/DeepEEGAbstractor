@@ -283,7 +283,8 @@ class SpatioTemporalWFB(BaseModel):
 
     def __init__(self,
                  input_shape,
-                 model_name='ST-WFB-CNN'):
+                 model_name='ST-WFB-CNN',
+                 attention=None):
         super().__init__(input_shape, model_name)
         self.n_kernels = [8, 6, 6, 4]
         self.strides = [1, 1, 1, 1]
@@ -293,6 +294,7 @@ class SpatioTemporalWFB(BaseModel):
         self.dropout_rate = 0.4
         self.use_bias = False
         self.kernel_size = 16
+        self.attention = attention
         if keras.backend.image_data_format() != 'channels_last':
             keras.backend.set_image_data_format('channels_last')
 
@@ -330,7 +332,14 @@ class SpatioTemporalWFB(BaseModel):
                                   strides=self.strides[3])
 
         # Temporal abstraction
-        x = keras.layers.GlobalAveragePooling1D()(x)
+        if self.attention is None:
+            x = keras.layers.GlobalAveragePooling1D()(x)
+        elif self.attention == 'v1':
+            x = TemporalAttention()(x)
+        elif self.attention == 'v2':
+            x = TemporalAttentionV2()(x)
+        else:
+            x = TemporalAttentionV3()(x)
 
         # Logistic regression unit
         output_tensor = keras.layers.Dense(1, activation='sigmoid', name='output')(x)
@@ -393,7 +402,8 @@ class TemporalWFB(BaseModel):
 
     def __init__(self,
                  input_shape,
-                 model_name='T-WFB-CNN'):
+                 model_name='T-WFB-CNN',
+                 attention=None):
         super().__init__(input_shape, model_name)
         self.wfb_kernel_length = 32
         self.wfb_kernel_units = 8
@@ -412,6 +422,7 @@ class TemporalWFB(BaseModel):
         self.st_2_n_kernel = 10
         self.st_2_strides = 1
         self.use_bias = False
+        self.attention = attention
         if keras.backend.image_data_format() != 'channels_last':
             keras.backend.set_image_data_format('channels_last')
 
@@ -459,10 +470,17 @@ class TemporalWFB(BaseModel):
                                   strides=self.st_2_strides)
 
         # Temporal abstraction
-        gap = keras.layers.GlobalAveragePooling1D()(block_4)
+        if self.attention is None:
+            x = keras.layers.GlobalAveragePooling1D()(block_4)
+        elif self.attention == 'v1':
+            x = TemporalAttention()(block_4)
+        elif self.attention == 'v2':
+            x = TemporalAttentionV2()(block_4)
+        else:
+            x = TemporalAttentionV3()(block_4)
 
         # Prediction
-        output_tensor = keras.layers.Dense(units=1, activation='sigmoid', name='output')(gap)
+        output_tensor = keras.layers.Dense(units=1, activation='sigmoid', name='output')(x)
 
         model = keras.Model(input_tensor, output_tensor)
         self.model_ = model
@@ -553,7 +571,9 @@ class TemporalDFB(BaseModel):
 
     def __init__(self,
                  input_shape,
-                 model_name='T-DFB-CNN'):
+                 model_name='T-DFB-CNN',
+                 normalize_kernels=False,
+                 attention=None):
         super().__init__(input_shape, model_name)
         self.dfb_kernel_length = 16
         self.dfb_kernel_units = 8
@@ -572,6 +592,8 @@ class TemporalDFB(BaseModel):
         self.st_2_n_kernel = 10
         self.st_2_strides = 1
         self.use_bias = False
+        self.normalized_kernels = normalize_kernels
+        self.attention = attention
         if keras.backend.image_data_format() != 'channels_last':
             keras.backend.set_image_data_format('channels_last')
 
@@ -619,10 +641,17 @@ class TemporalDFB(BaseModel):
                                   strides=self.st_2_strides)
 
         # Temporal abstraction
-        gap = keras.layers.GlobalAveragePooling1D()(block_4)
+        if self.attention is None:
+            x = keras.layers.GlobalAveragePooling1D()(block_4)
+        elif self.attention == 'v1':
+            x = TemporalAttention()(block_4)
+        elif self.attention == 'v2':
+            x = TemporalAttentionV2()(block_4)
+        else:
+            x = TemporalAttentionV3()(block_4)
 
         # Prediction
-        output_tensor = keras.layers.Dense(units=1, activation='sigmoid', name='output')(gap)
+        output_tensor = keras.layers.Dense(units=1, activation='sigmoid', name='output')(x)
 
         model = keras.Model(input_tensor, output_tensor)
         self.model_ = model
@@ -654,6 +683,11 @@ class TemporalDFB(BaseModel):
         return output
 
     def _temporal_conv1d(self, input_tensor, n_units, kernel_length, strides, dilation_rate):
+        if self.normalized_kernels:
+            norm = keras.constraints.UnitNorm(axis=(0, 1))
+        else:
+            norm = None
+
         x = keras.layers.Conv2D(filters=n_units,
                                 kernel_size=(1, kernel_length),
                                 strides=(1, strides),
@@ -661,10 +695,13 @@ class TemporalDFB(BaseModel):
                                 data_format='channels_last',
                                 dilation_rate=(1, dilation_rate),
                                 activation=None,
-                                use_bias=self.use_bias)(input_tensor)
+                                use_bias=self.use_bias,
+                                kernel_constraint=norm)(input_tensor)
 
         # Normalize outputs: normalize each input channel
-        x = InstanceNorm(axis=1, mean=0, stddev=1.0)(x)
+        if norm is None:
+            x = InstanceNorm(mean=0,
+                             stddev=1)(x)
 
         out = keras.layers.Activation('elu')(x)
         return out
@@ -709,7 +746,8 @@ class SpatioTemporalDFB(BaseModel):
     def __init__(self,
                  input_shape,
                  model_name='ST-DFB-CNN',
-                 normalize_kernels=False):
+                 normalize_kernels=False,
+                 attention=None):
         super().__init__(input_shape, model_name)
         self.n_kernels = [8, 8, 6, 6, 4]
         self.pool_size = 2
@@ -719,6 +757,7 @@ class SpatioTemporalDFB(BaseModel):
         self.use_bias = False
         self.kernel_size = 4
         self.normalized_kernels = normalize_kernels
+        self.attention = attention
         if keras.backend.image_data_format() != 'channels_last':
             keras.backend.set_image_data_format('channels_last')
 
@@ -764,7 +803,14 @@ class SpatioTemporalDFB(BaseModel):
                                   strides=1)
 
         # Temporal abstraction
-        x = keras.layers.GlobalAveragePooling1D()(x)
+        if self.attention is None:
+            x = keras.layers.GlobalAveragePooling1D()(x)
+        elif self.attention == 'v1':
+            x = TemporalAttention()(x)
+        elif self.attention == 'v2':
+            x = TemporalAttentionV2()(x)
+        else:
+            x = TemporalAttentionV3()(x)
 
         # Logistic regression unit
         output_tensor = keras.layers.Dense(1, activation='sigmoid', name='output')(x)
