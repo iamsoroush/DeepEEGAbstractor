@@ -790,7 +790,7 @@ class SpatioTemporalDFB(BaseModel):
                  pool_size=2,
                  pool_stride=2,
                  spatial_dropout_rate=0.1,
-                 dropout_rate=0.2,
+                 dropout_rate=0.3,
                  use_bias=False,
                  kernel_size=4,
                  normalize_kernels=False,
