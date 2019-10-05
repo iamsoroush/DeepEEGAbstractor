@@ -288,7 +288,7 @@ class SpatioTemporalWFB(BaseModel):
                  pool_size=2,
                  pool_stride=2,
                  spatial_dropout_rate=0.1,
-                 dropout_rate=0.2,
+                 dropout_rate=0.3,
                  use_bias=False,
                  kernel_size=16,
                  attention=None):
@@ -648,7 +648,7 @@ class TemporalDFB(BaseModel):
         block_1 = self._st_dilated_filter_bank(input_tensor=permuted_input,
                                                n_units=self.dfb_kernel_units,
                                                strides=self.dfb_kernel_strides)
-        block_1 = keras.layers.SpatialDropout2D(self.sdropout_rate)(block_1)
+        block_1 = keras.layers.SpatialDropout2D(self.spatial_dropout_rate)(block_1)
         block_1 = keras.layers.Permute((3, 2, 1))(block_1)  # out[:, :, -1] is representation of a unique input channel
         block_1 = keras.layers.AveragePooling2D(pool_size=(1, self.pool_size),
                                                 strides=(1, self.pool_strides))(block_1)
@@ -665,7 +665,7 @@ class TemporalDFB(BaseModel):
                                                 strides=self.pool_strides)(block_2)
 
         # Block 3: Spatio-temporal mixing of channels
-        block_3 = keras.layers.SpatialDropout1D(self.sdropout_rate)(block_2)
+        block_3 = keras.layers.SpatialDropout1D(self.spatial_dropout_rate)(block_2)
         block_3 = self._st_conv1d(input_tensor=block_3,
                                   n_units=self.st_1_n_kernel,
                                   kernel_length=self.st_1_kernel_length,
