@@ -102,8 +102,6 @@ class TemporalAttention(keras.layers.Layer):
 class TemporalAttentionV3(keras.layers.Layer):
     """Attention layer for conv1d networks.
 
-    Source paper: arXiv:1512.08756v5
-
     Summarizes temporal axis and outputs a vector with the same length as channels.
     Note that the unweighted attention will be simple GlobalAveragePooling1D
 
@@ -122,7 +120,7 @@ class TemporalAttentionV3(keras.layers.Layer):
                  b_regularizer=None,
                  w_constraint=None,
                  b_constraint=None,
-                 bias=True,
+                 bias=False,
                  **kwargs):
 
         self.supports_masking = True
@@ -169,6 +167,7 @@ class TemporalAttentionV3(keras.layers.Layer):
             a += self.b
 
         a = keras.backend.tanh(a)
+        a = a / keras.backend.abs(keras.backend.sum(a, axis=-1, keepdims=True) + keras.backend.epsilon())
 
         # x: T*D, a: T*1
         weighted_input = x * keras.backend.expand_dims(a)
@@ -185,7 +184,7 @@ class TemporalAttentionV3(keras.layers.Layer):
             x: input
             kernel: weights
         """
-        return keras.backend.squeeze(keras.backend.dot(x, keras.backend.expand_dims(kernel)), axis=-1)
+        return keras.backend.squeeze(keras.backend.dot(x, keras.backend.expand_dims(kernel, axis=-1)), axis=-1)
 
 
 class TemporalAttentionV2(keras.layers.Layer):
