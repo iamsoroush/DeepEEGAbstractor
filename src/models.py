@@ -284,16 +284,23 @@ class SpatioTemporalWFB(BaseModel):
     def __init__(self,
                  input_shape,
                  model_name='ST-WFB-CNN',
+                 n_kernels=(8, 6, 6, 4),
+                 pool_size=2,
+                 pool_stride=2,
+                 spatial_dropout_rate=0.2,
+                 dropout_rate=0.4,
+                 use_bias=False,
+                 kernel_size=16,
                  attention=None):
         super().__init__(input_shape, model_name)
-        self.n_kernels = [8, 6, 6, 4]
-        self.strides = [1, 1, 1, 1]
-        self.pool_size = 2
-        self.pool_stride = 2
-        self.spatial_dropout_rate = 0.2
-        self.dropout_rate = 0.4
-        self.use_bias = False
-        self.kernel_size = 16
+        self.n_kernels = n_kernels
+        self.strides = [1 for _ in range(len(n_kernels))]
+        self.pool_size = pool_size
+        self.pool_stride = pool_stride
+        self.spatial_dropout_rate = spatial_dropout_rate
+        self.dropout_rate = dropout_rate
+        self.use_bias = use_bias
+        self.kernel_size = kernel_size
         self.attention = attention
         if keras.backend.image_data_format() != 'channels_last':
             keras.backend.set_image_data_format('channels_last')
@@ -403,25 +410,41 @@ class TemporalWFB(BaseModel):
     def __init__(self,
                  input_shape,
                  model_name='T-WFB-CNN',
+                 wfb_kernel_length=32,
+                 wfb_kernel_units=8,
+                 spatial_dropout_rate=0.2,
+                 pool_size=2,
+                 pool_strides=2,
+                 channel_wise_layer_kernel_length=4,
+                 channel_wise_layer_n_kernel=1,
+                 channel_wise_layer_strides=1,
+                 dropout_rate=0.4,
+                 st_1_kernel_length=8,
+                 st_1_n_kernel=16,
+                 st_1_strides=1,
+                 st_2_kernel_length=8,
+                 st_2_n_kernel=10,
+                 st_2_strides=1,
+                 use_bias=False,
                  attention=None):
         super().__init__(input_shape, model_name)
-        self.wfb_kernel_length = 32
-        self.wfb_kernel_units = 8
+        self.wfb_kernel_length = wfb_kernel_length
+        self.wfb_kernel_units = wfb_kernel_units
         self.wfb_kernel_strides = 1
-        self.sdropout_rate = 0.2
-        self.pool_size = 2
-        self.pool_strides = 2
-        self.channel_wise_layer_kernel_length = 4
-        self.channel_wise_layer_n_kernel = 1
-        self.channel_wise_layer_strides = 1
-        self.dropout_rate = 0.4
-        self.st_1_kernel_length = 8
-        self.st_1_n_kernel = 16
-        self.st_1_strides = 1
-        self.st_2_kernel_length = 8
-        self.st_2_n_kernel = 10
-        self.st_2_strides = 1
-        self.use_bias = False
+        self.spatial_dropout_rate = spatial_dropout_rate
+        self.pool_size = pool_size
+        self.pool_strides = pool_strides
+        self.channel_wise_layer_kernel_length = channel_wise_layer_kernel_length
+        self.channel_wise_layer_n_kernel = channel_wise_layer_n_kernel
+        self.channel_wise_layer_strides = channel_wise_layer_strides
+        self.dropout_rate = dropout_rate
+        self.st_1_kernel_length = st_1_kernel_length
+        self.st_1_n_kernel = st_1_n_kernel
+        self.st_1_strides = st_1_strides
+        self.st_2_kernel_length = st_2_kernel_length
+        self.st_2_n_kernel = st_2_n_kernel
+        self.st_2_strides = st_2_strides
+        self.use_bias = use_bias
         self.attention = attention
         if keras.backend.image_data_format() != 'channels_last':
             keras.backend.set_image_data_format('channels_last')
@@ -437,7 +460,7 @@ class TemporalWFB(BaseModel):
         block_1 = self._temporal_dilated_filter_bank(input_tensor=permuted_input,
                                                      n_units=self.wfb_kernel_units,
                                                      strides=self.wfb_kernel_strides)
-        block_1 = keras.layers.SpatialDropout2D(self.sdropout_rate)(block_1)
+        block_1 = keras.layers.SpatialDropout2D(self.spatial_dropout_rate)(block_1)
         block_1 = keras.layers.Permute((3, 2, 1))(block_1)  # out[:, :, -1] is representation of a unique input channel
         block_1 = keras.layers.AveragePooling2D(pool_size=(1, self.pool_size),
                                                 strides=(1, self.pool_strides))(block_1)
@@ -454,7 +477,7 @@ class TemporalWFB(BaseModel):
                                                 strides=self.pool_strides)(block_2)
 
         # Block 3: Spatio-temporal mixing of channels
-        block_3 = keras.layers.SpatialDropout1D(self.sdropout_rate)(block_2)
+        block_3 = keras.layers.SpatialDropout1D(self.spatial_dropout_rate)(block_2)
         block_3 = self._st_conv1d(input_tensor=block_3,
                                   n_units=self.st_1_n_kernel,
                                   kernel_length=self.st_1_kernel_length,
@@ -572,26 +595,43 @@ class TemporalDFB(BaseModel):
     def __init__(self,
                  input_shape,
                  model_name='T-DFB-CNN',
+                 dfb_kernel_length=16,
+                 dfb_kernel_units=8,
+                 dfb_kernel_strides=1,
+                 spatial_dropout_rate=0.2,
+                 pool_size=2,
+                 pool_strides=2,
+                 channel_wise_layer_kernel_length=4,
+                 channel_wise_layer_n_kernel=1,
+                 channel_wise_layer_strides=1,
+                 dropout_rate=0.4,
+                 st_1_kernel_length=8,
+                 st_1_n_kernel=16,
+                 st_1_strides=1,
+                 st_2_kernel_length=8,
+                 st_2_n_kernel=10,
+                 st_2_strides=1,
+                 use_bias=False,
                  normalize_kernels=False,
                  attention=None):
         super().__init__(input_shape, model_name)
-        self.dfb_kernel_length = 16
-        self.dfb_kernel_units = 8
-        self.dfb_kernel_strides = 1
-        self.sdropout_rate = 0.2
-        self.pool_size = 2
-        self.pool_strides = 2
-        self.channel_wise_layer_kernel_length = 4
-        self.channel_wise_layer_n_kernel = 1
-        self.channel_wise_layer_strides = 1
-        self.dropout_rate = 0.4
-        self.st_1_kernel_length = 8
-        self.st_1_n_kernel = 16
-        self.st_1_strides = 1
-        self.st_2_kernel_length = 8
-        self.st_2_n_kernel = 10
-        self.st_2_strides = 1
-        self.use_bias = False
+        self.dfb_kernel_length = dfb_kernel_length
+        self.dfb_kernel_units = dfb_kernel_units
+        self.dfb_kernel_strides = dfb_kernel_strides
+        self.spatial_dropout_rate = spatial_dropout_rate
+        self.pool_size = pool_size
+        self.pool_strides = pool_strides
+        self.channel_wise_layer_kernel_length = channel_wise_layer_kernel_length
+        self.channel_wise_layer_n_kernel = channel_wise_layer_n_kernel
+        self.channel_wise_layer_strides = channel_wise_layer_strides
+        self.dropout_rate = dropout_rate
+        self.st_1_kernel_length = st_1_kernel_length
+        self.st_1_n_kernel = st_1_n_kernel
+        self.st_1_strides = st_1_strides
+        self.st_2_kernel_length = st_2_kernel_length
+        self.st_2_n_kernel = st_2_n_kernel
+        self.st_2_strides = st_2_strides
+        self.use_bias = use_bias
         self.normalized_kernels = normalize_kernels
         self.attention = attention
         if keras.backend.image_data_format() != 'channels_last':
@@ -746,16 +786,23 @@ class SpatioTemporalDFB(BaseModel):
     def __init__(self,
                  input_shape,
                  model_name='ST-DFB-CNN',
+                 n_kernels=(8, 8, 6, 6, 4),
+                 pool_size=2,
+                 pool_stride=2,
+                 spatial_dropout_rate=0.2,
+                 dropout_rate=0.4,
+                 use_bias=False,
+                 kernel_size=4,
                  normalize_kernels=False,
                  attention=None):
         super().__init__(input_shape, model_name)
-        self.n_kernels = [8, 8, 6, 6, 4]
-        self.pool_size = 2
-        self.pool_stride = 2
-        self.spatial_dropout_rate = 0.2
-        self.dropout_rate = 0.4
-        self.use_bias = False
-        self.kernel_size = 4
+        self.n_kernels = n_kernels
+        self.pool_size = pool_size
+        self.pool_stride = pool_stride
+        self.spatial_dropout_rate = spatial_dropout_rate
+        self.dropout_rate = dropout_rate
+        self.use_bias = use_bias
+        self.kernel_size = kernel_size
         self.normalized_kernels = normalize_kernels
         self.attention = attention
         if keras.backend.image_data_format() != 'channels_last':
