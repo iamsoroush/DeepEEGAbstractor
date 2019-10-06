@@ -258,7 +258,7 @@ class CrossValidator:
                 test_indices.append(list())
                 folds = StratifiedKFold(n_splits=self.k,
                                         shuffle=True,
-                                        random_state=self.np_random_state)
+                                        random_state=(i + 1) * self.np_random_state)
                 for train_ind, test_ind in folds.split(data, labels):
                     train_indices[-1].append(train_ind)
                     test_indices[-1].append(test_ind)
