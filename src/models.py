@@ -236,6 +236,7 @@ class EEGNet(BaseModel):
                                      (1, 2 * self.kernel_length),
                                      padding='same',
                                      use_bias=False)(input1)
+
         block1 = keras.layers.BatchNormalization(axis=-1)(block1)
         block1 = keras.layers.DepthwiseConv2D((channels, 1),
                                               use_bias=False,
@@ -268,6 +269,130 @@ class EEGNet(BaseModel):
         self.model_ = model
 
         return model
+
+
+class ModeifiedEEGNet(BaseModel):
+
+    """Modified EEGNet.
+    """
+
+    def __init__(self,
+                 input_shape,
+                 model_name='m-eegnet',
+                 dropout_rate=0.5,
+                 kernel_length=64,
+                 f1=8,
+                 d=2,
+                 f2=16,
+                 norm_rate=0.25,
+                 init_layer_type='wfb'):
+        super().__init__(input_shape, model_name)
+        self.dropout_rate = dropout_rate
+        self.kernel_length = kernel_length
+        self.f1 = f1
+        self.d = d
+        self.f2 = f2
+        self.norm_rate = norm_rate
+        assert init_layer_type in ('wfb', 'dfb'), 'init layer type is incorrect.'
+        self.init_layer_type = init_layer_type
+        if keras.backend.image_data_format() != 'channels_last':
+            keras.backend.set_image_data_format('channels_last')
+
+    def create_model(self):
+        samples, channels = self.input_shape_
+        input_tensor = keras.layers.Input(shape=self.input_shape_)
+        input1 = keras.layers.Permute((2, 1))(input_tensor)
+        input1 = keras.layers.Lambda(keras.backend.expand_dims,
+                                     arguments={'axis': -1},
+                                     name='standard_input')(input1)
+
+        if self.init_layer_type == 'wfb':
+            block1 = self._temporal_wfb(input1)
+        else:
+            block1 = self._temporal_dfb(input1)
+        block1 = keras.layers.BatchNormalization(axis=-1)(block1)
+        block1 = keras.layers.DepthwiseConv2D((channels, 1),
+                                              use_bias=False,
+                                              depth_multiplier=self.d,
+                                              depthwise_constraint=keras.constraints.max_norm(1.))(block1)
+        block1 = keras.layers.BatchNormalization(axis=-1)(block1)
+        block1 = keras.layers.Activation('relu')(block1)
+        block1 = keras.layers.AveragePooling2D((1, 2 * 4))(block1)
+        block1 = keras.layers.Dropout(self.dropout_rate)(block1)
+
+        block2 = keras.layers.SeparableConv2D(self.f2,
+                                              (1, 2 * 16),
+                                              use_bias=False,
+                                              padding='same')(block1)
+        block2 = keras.layers.BatchNormalization(axis=-1)(block2)
+        block2 = keras.layers.Activation('relu')(block2)
+        block2 = keras.layers.AveragePooling2D((1, 2 * 8))(block2)
+        block2 = keras.layers.Dropout(self.dropout_rate)(block2)
+
+        flatten = keras.layers.Flatten(name='flatten')(block2)
+
+        dense = keras.layers.Dense(1,
+                                   name='dense',
+                                   kernel_constraint=keras.constraints.max_norm(self.norm_rate))(flatten)
+        output = keras.layers.Activation('sigmoid',
+                                         name='output')(dense)
+
+        model = keras.Model(inputs=input_tensor,
+                            outputs=output)
+        self.model_ = model
+
+        return model
+
+    def _temporal_wfb(self, input_tensor):
+        branch_a = self._temporal_conv1d(input_tensor=input_tensor,
+                                         n_units=self.f1,
+                                         kernel_length=2 * self.kernel_length,
+                                         dilation_rate=1)
+        branch_b = self._temporal_conv1d(input_tensor=input_tensor,
+                                         n_units=self.f1 / 2,
+                                         kernel_length=2 * self.kernel_length // 2,
+                                         dilation_rate=2)
+        branch_c = self._temporal_conv1d(input_tensor=input_tensor,
+                                         n_units=self.f1 / 2,
+                                         kernel_length=2 * self.kernel_length // 4,
+                                         dilation_rate=4)
+        branch_d = self._temporal_conv1d(input_tensor=input_tensor,
+                                         n_units=self.f1 / 2,
+                                         kernel_length=2 * self.kernel_length // 8,
+                                         dilation_rate=8)
+        output = keras.layers.concatenate([branch_a, branch_b, branch_c, branch_d], axis=-1)
+        return output
+
+    def _temporal_dfb(self, input_tensor):
+        branch_a = self._temporal_conv1d(input_tensor=input_tensor,
+                                         n_units=self.f1,
+                                         kernel_length=2 * self.kernel_length / 8,
+                                         dilation_rate=1)
+        branch_b = self._temporal_conv1d(input_tensor=input_tensor,
+                                         n_units=self.f1 / 2,
+                                         kernel_length=2 * self.kernel_length / 8,
+                                         dilation_rate=2)
+        branch_c = self._temporal_conv1d(input_tensor=input_tensor,
+                                         n_units=self.f1 / 2,
+                                         kernel_length=2 * self. kernel_length / 8,
+                                         dilation_rate=4)
+        branch_d = self._temporal_conv1d(input_tensor=input_tensor,
+                                         n_units=self.f1 / 2,
+                                         kernel_length=2 * self. kernel_length / 8,
+                                         dilation_rate=8)
+        output = keras.layers.concatenate([branch_a, branch_b, branch_c, branch_d], axis=-1)
+        return output
+
+    @staticmethod
+    def _temporal_conv1d(input_tensor, n_units, kernel_length, dilation_rate):
+        x = keras.layers.Conv2D(filters=n_units,
+                                kernel_size=(1, kernel_length),
+                                padding='same',
+                                data_format='channels_last',
+                                dilation_rate=(1, dilation_rate),
+                                activation=None,
+                                use_bias=False)(input_tensor)
+        return x
 
 
 class SpatioTemporalWFB(BaseModel):
