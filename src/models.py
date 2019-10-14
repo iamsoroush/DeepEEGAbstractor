@@ -545,7 +545,7 @@ class TemporalWFB(BaseModel):
                  channel_wise_layer_strides=1,
                  dropout_rate=0.2,
                  st_1_kernel_length=8,
-                 st_1_n_kernel=16,
+                 st_1_n_kernel=10,
                  st_1_strides=1,
                  st_2_kernel_length=8,
                  st_2_n_kernel=10,
@@ -582,9 +582,9 @@ class TemporalWFB(BaseModel):
                                              name='permuted_input')(permuted_input)
 
         # Block 1: Temporal dilated filter-bank for initial feature extraction
-        block_1 = self._temporal_dilated_filter_bank(input_tensor=permuted_input,
-                                                     n_units=self.wfb_kernel_units,
-                                                     strides=self.wfb_kernel_strides)
+        block_1 = self._temporal_windowed_filter_bank(input_tensor=permuted_input,
+                                                      n_units=self.wfb_kernel_units,
+                                                      strides=self.wfb_kernel_strides)
         block_1 = keras.layers.SpatialDropout2D(self.spatial_dropout_rate)(block_1)
         block_1 = keras.layers.Permute((3, 2, 1))(block_1)  # out[:, :, -1] is representation of a unique input channel
         block_1 = keras.layers.AveragePooling2D(pool_size=(1, self.pool_size),
@@ -607,25 +607,25 @@ class TemporalWFB(BaseModel):
                                   n_units=self.st_1_n_kernel,
                                   kernel_length=self.st_1_kernel_length,
                                   strides=self.st_1_strides)
-        block_3 = keras.layers.AveragePooling1D(pool_size=self.pool_size,
-                                                strides=self.pool_strides)(block_3)
-
-        # Block 4
-        block_4 = keras.layers.Dropout(self.dropout_rate)(block_3)
-        block_4 = self._st_conv1d(input_tensor=block_4,
-                                  n_units=self.st_2_n_kernel,
-                                  kernel_length=self.st_2_kernel_length,
-                                  strides=self.st_2_strides)
+        # block_3 = keras.layers.AveragePooling1D(pool_size=self.pool_size,
+        #                                         strides=self.pool_strides)(block_3)
+        #
+        # # Block 4
+        # block_4 = keras.layers.Dropout(self.dropout_rate)(block_3)
+        # block_4 = self._st_conv1d(input_tensor=block_4,
+        #                           n_units=self.st_2_n_kernel,
+        #                           kernel_length=self.st_2_kernel_length,
+        #                           strides=self.st_2_strides)
 
         # Temporal abstraction
         if self.attention is None:
-            x = keras.layers.GlobalAveragePooling1D()(block_4)
+            x = keras.layers.GlobalAveragePooling1D()(block_3)
         elif self.attention == 'v1':
-            x = TemporalAttention()(block_4)
+            x = TemporalAttention()(block_3)
         elif self.attention == 'v2':
-            x = TemporalAttentionV2()(block_4)
+            x = TemporalAttentionV2()(block_3)
         else:
-            x = TemporalAttentionV3()(block_4)
+            x = TemporalAttentionV3()(block_3)
 
         # Prediction
         output_tensor = keras.layers.Dense(units=1, activation='sigmoid', name='output')(x)
@@ -635,7 +635,7 @@ class TemporalWFB(BaseModel):
 
         return model
 
-    def _temporal_dilated_filter_bank(self, input_tensor, n_units, strides):
+    def _temporal_windowed_filter_bank(self, input_tensor, n_units, strides):
         branch_a = self._temporal_conv1d(input_tensor=input_tensor,
                                          n_units=n_units,
                                          kernel_length=self.wfb_kernel_length,
@@ -731,7 +731,7 @@ class TemporalDFB(BaseModel):
                  channel_wise_layer_strides=1,
                  dropout_rate=0.2,
                  st_1_kernel_length=8,
-                 st_1_n_kernel=16,
+                 st_1_n_kernel=10,
                  st_1_strides=1,
                  st_2_kernel_length=8,
                  st_2_n_kernel=10,
@@ -770,9 +770,9 @@ class TemporalDFB(BaseModel):
                                              name='permuted_input')(permuted_input)
 
         # Block 1: Temporal dilated filter-bank for initial feature extraction
-        block_1 = self._st_dilated_filter_bank(input_tensor=permuted_input,
-                                               n_units=self.dfb_kernel_units,
-                                               strides=self.dfb_kernel_strides)
+        block_1 = self._temporal_dilated_filter_bank(input_tensor=permuted_input,
+                                                     n_units=self.dfb_kernel_units,
+                                                     strides=self.dfb_kernel_strides)
         block_1 = keras.layers.SpatialDropout2D(self.spatial_dropout_rate)(block_1)
         block_1 = keras.layers.Permute((3, 2, 1))(block_1)  # out[:, :, -1] is representation of a unique input channel
         block_1 = keras.layers.AveragePooling2D(pool_size=(1, self.pool_size),
@@ -795,25 +795,25 @@ class TemporalDFB(BaseModel):
                                   n_units=self.st_1_n_kernel,
                                   kernel_length=self.st_1_kernel_length,
                                   strides=self.st_1_strides)
-        block_3 = keras.layers.AveragePooling1D(pool_size=self.pool_size,
-                                                strides=self.pool_strides)(block_3)
-
-        # Block 4
-        block_4 = keras.layers.Dropout(self.dropout_rate)(block_3)
-        block_4 = self._st_conv1d(input_tensor=block_4,
-                                  n_units=self.st_2_n_kernel,
-                                  kernel_length=self.st_2_kernel_length,
-                                  strides=self.st_2_strides)
+        # block_3 = keras.layers.AveragePooling1D(pool_size=self.pool_size,
+        #                                         strides=self.pool_strides)(block_3)
+        #
+        # # Block 4
+        # block_4 = keras.layers.Dropout(self.dropout_rate)(block_3)
+        # block_4 = self._st_conv1d(input_tensor=block_4,
+        #                           n_units=self.st_2_n_kernel,
+        #                           kernel_length=self.st_2_kernel_length,
+        #                           strides=self.st_2_strides)
 
         # Temporal abstraction
         if self.attention is None:
-            x = keras.layers.GlobalAveragePooling1D()(block_4)
+            x = keras.layers.GlobalAveragePooling1D()(block_3)
         elif self.attention == 'v1':
-            x = TemporalAttention()(block_4)
+            x = TemporalAttention()(block_3)
         elif self.attention == 'v2':
-            x = TemporalAttentionV2()(block_4)
+            x = TemporalAttentionV2()(block_3)
         else:
-            x = TemporalAttentionV3()(block_4)
+            x = TemporalAttentionV3()(block_3)
 
         # Prediction
         output_tensor = keras.layers.Dense(units=1, activation='sigmoid', name='output')(x)
@@ -823,7 +823,7 @@ class TemporalDFB(BaseModel):
 
         return model
 
-    def _st_dilated_filter_bank(self, input_tensor, n_units, strides):
+    def _temporal_dilated_filter_bank(self, input_tensor, n_units, strides):
         branch_a = self._temporal_conv1d(input_tensor=input_tensor,
                                          n_units=n_units,
                                          kernel_length=self.dfb_kernel_length,
