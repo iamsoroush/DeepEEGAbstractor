@@ -271,7 +271,7 @@ class EEGNet(BaseModel):
         return model
 
 
-class ModeifiedEEGNet(BaseModel):
+class ModifiedEEGNet(BaseModel):
 
     """Modified EEGNet.
     """
@@ -346,19 +346,19 @@ class ModeifiedEEGNet(BaseModel):
     def _temporal_wfb(self, input_tensor):
         branch_a = self._temporal_conv1d(input_tensor=input_tensor,
                                          n_units=self.f1,
-                                         kernel_length=2 * self.kernel_length,
+                                         kernel_length=int(2 * self.kernel_length),
                                          dilation_rate=1)
         branch_b = self._temporal_conv1d(input_tensor=input_tensor,
-                                         n_units=self.f1 / 2,
-                                         kernel_length=2 * self.kernel_length // 2,
+                                         n_units=int(self.f1 / 2),
+                                         kernel_length=int(2 * self.kernel_length // 2),
                                          dilation_rate=2)
         branch_c = self._temporal_conv1d(input_tensor=input_tensor,
-                                         n_units=self.f1 / 2,
-                                         kernel_length=2 * self.kernel_length // 4,
+                                         n_units=int(self.f1 / 2),
+                                         kernel_length=int(2 * self.kernel_length // 4),
                                          dilation_rate=4)
         branch_d = self._temporal_conv1d(input_tensor=input_tensor,
-                                         n_units=self.f1 / 2,
-                                         kernel_length=2 * self.kernel_length // 8,
+                                         n_units=int(self.f1 / 2),
+                                         kernel_length=int(2 * self.kernel_length // 8),
                                          dilation_rate=8)
         output = keras.layers.concatenate([branch_a, branch_b, branch_c, branch_d], axis=-1)
         return output
@@ -366,19 +366,19 @@ class ModeifiedEEGNet(BaseModel):
     def _temporal_dfb(self, input_tensor):
         branch_a = self._temporal_conv1d(input_tensor=input_tensor,
                                          n_units=self.f1,
-                                         kernel_length=2 * self.kernel_length / 8,
+                                         kernel_length=int(2 * self.kernel_length / 8),
                                          dilation_rate=1)
         branch_b = self._temporal_conv1d(input_tensor=input_tensor,
-                                         n_units=self.f1 / 2,
-                                         kernel_length=2 * self.kernel_length / 8,
+                                         n_units=int(self.f1 / 2),
+                                         kernel_length=int(2 * self.kernel_length / 8),
                                          dilation_rate=2)
         branch_c = self._temporal_conv1d(input_tensor=input_tensor,
-                                         n_units=self.f1 / 2,
-                                         kernel_length=2 * self. kernel_length / 8,
+                                         n_units=int(self.f1 / 2),
+                                         kernel_length=int(2 * self. kernel_length / 8),
                                          dilation_rate=4)
         branch_d = self._temporal_conv1d(input_tensor=input_tensor,
-                                         n_units=self.f1 / 2,
-                                         kernel_length=2 * self. kernel_length / 8,
+                                         n_units=int(self.f1 / 2),
+                                         kernel_length=int(2 * self. kernel_length / 8),
                                          dilation_rate=8)
         output = keras.layers.concatenate([branch_a, branch_b, branch_c, branch_d], axis=-1)
         return output
