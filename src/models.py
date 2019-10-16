@@ -721,7 +721,7 @@ class TemporalDFB(BaseModel):
                  input_shape,
                  model_name='T-DFB-CNN',
                  dfb_kernel_length=16,
-                 dfb_kernel_units=8,
+                 dfb_kernel_units=4,
                  dfb_kernel_strides=1,
                  spatial_dropout_rate=0.1,
                  pool_size=2,
@@ -825,7 +825,7 @@ class TemporalDFB(BaseModel):
 
     def _temporal_dilated_filter_bank(self, input_tensor, n_units, strides):
         branch_a = self._temporal_conv1d(input_tensor=input_tensor,
-                                         n_units=n_units,
+                                         n_units=n_units * 2,
                                          kernel_length=self.dfb_kernel_length,
                                          strides=strides,
                                          dilation_rate=1)
@@ -872,18 +872,31 @@ class TemporalDFB(BaseModel):
         return out
 
     def _st_conv1d(self, input_tensor, n_units, kernel_length, strides):
+        if self.normalized_kernels:
+            norm = keras.constraints.UnitNorm(axis=(0, 1))
+        else:
+            norm = None
         x = keras.layers.Conv1D(filters=n_units,
                                 kernel_size=kernel_length,
                                 strides=strides,
                                 padding='valid',
                                 data_format='channels_last',
                                 dilation_rate=1,
-                                activation=None)(input_tensor)
-        x = InstanceNorm(axis=-1, mean=0, stddev=1.0)(x)
+                                activation=None,
+                                kernel_constraint=norm)(input_tensor)
+        if norm is None:
+            x = InstanceNorm(mean=0,
+                             stddev=1,
+                             axis=-1)(x)
+
         out = keras.layers.Activation('elu')(x)
         return out
 
     def _channel_wise_mixing(self, input_tensor, kernel_length, strides, n_kernel):
+        if self.normalized_kernels:
+            norm = keras.constraints.UnitNorm(axis=(0, 1))
+        else:
+            norm = None
         n_features = keras.backend.int_shape(input_tensor)[-3]
         x = keras.layers.DepthwiseConv2D(kernel_size=(n_features, kernel_length),
                                          strides=(1, strides),
@@ -891,8 +904,12 @@ class TemporalDFB(BaseModel):
                                          depth_multiplier=n_kernel,
                                          data_format='channels_last',
                                          activation=None,
-                                         use_bias=self.use_bias)(input_tensor)
-        x = InstanceNorm(axis=-1, mean=0, stddev=1.0)(x)
+                                         use_bias=self.use_bias,
+                                         kernel_constraint=norm)(input_tensor)
+        if norm is None:
+            x = InstanceNorm(mean=0,
+                             stddev=1,
+                             axis=-1)(x)
         out = keras.layers.Activation('elu')(x)
         return out
 
