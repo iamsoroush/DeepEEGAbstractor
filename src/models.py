@@ -286,7 +286,8 @@ class ModifiedEEGNet(BaseModel):
                  f2=16,
                  norm_rate=0.25,
                  init_layer_type='wfb',
-                 normalize_kernels=False):
+                 normalize_kernels=False,
+                 attention=None):
         super().__init__(input_shape, model_name)
         self.dropout_rate = dropout_rate
         self.kernel_length = kernel_length
@@ -297,6 +298,7 @@ class ModifiedEEGNet(BaseModel):
         assert init_layer_type in ('wfb', 'dfb'), 'init layer type is incorrect.'
         self.init_layer_type = init_layer_type
         self.normalize_kernels = normalize_kernels
+        self.attention = attention
         if keras.backend.image_data_format() != 'channels_last':
             keras.backend.set_image_data_format('channels_last')
 
@@ -337,20 +339,25 @@ class ModifiedEEGNet(BaseModel):
             block2 = keras.layers.BatchNormalization(axis=-1)(block2)
         block2 = keras.layers.Activation('relu')(block2)
         block2 = keras.layers.AveragePooling2D((1, 2 * 8))(block2)
-        block2 = keras.layers.Dropout(self.dropout_rate)(block2)
-
-        flatten = keras.layers.Flatten(name='flatten')(block2)
+        if self.attention is None:
+            block2 = keras.layers.Dropout(self.dropout_rate)(block2)
+            block2 = keras.layers.Flatten(name='flatten')(block2)
+        elif self.attention == 'v1':
+            block2 = TemporalAttention()(block2)
+        elif self.attention == 'v2':
+            block2 = TemporalAttentionV2()(block2)
+        else:
+            block2 = TemporalAttentionV3()(block2)
 
         dense = keras.layers.Dense(1,
                                    name='dense',
-                                   kernel_constraint=keras.constraints.max_norm(self.norm_rate))(flatten)
+                                   kernel_constraint=keras.constraints.max_norm(self.norm_rate))(block2)
         output = keras.layers.Activation('sigmoid',
                                          name='output')(dense)
 
         model = keras.Model(inputs=input_tensor,
                             outputs=output)
         self.model_ = model
-
         return model
 
     def _temporal_wfb(self, input_tensor):
