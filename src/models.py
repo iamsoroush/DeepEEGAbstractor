@@ -909,7 +909,7 @@ class TemporalDFB(BaseModel):
 
     def _channel_wise_mixing(self, input_tensor, kernel_length, strides, n_kernel):
         if self.normalized_kernels:
-            norm = keras.constraints.UnitNorm(axis=(0, 1))
+            norm = keras.constraints.UnitNorm(axis=(0, 1, 2))
         else:
             norm = None
         n_features = keras.backend.int_shape(input_tensor)[-3]
