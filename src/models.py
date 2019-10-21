@@ -287,7 +287,8 @@ class ModifiedEEGNet(BaseModel):
                  norm_rate=0.25,
                  init_layer_type='wfb',
                  normalize_kernels=False,
-                 attention=None):
+                 attention=None,
+                 activation='relu'):
         super().__init__(input_shape, model_name)
         self.dropout_rate = dropout_rate
         self.kernel_length = kernel_length
@@ -299,6 +300,7 @@ class ModifiedEEGNet(BaseModel):
         self.init_layer_type = init_layer_type
         self.normalize_kernels = normalize_kernels
         self.attention = attention
+        self.activation = activation
         if keras.backend.image_data_format() != 'channels_last':
             keras.backend.set_image_data_format('channels_last')
 
@@ -314,30 +316,21 @@ class ModifiedEEGNet(BaseModel):
             block1 = self._temporal_wfb(input1)
         else:
             block1 = self._temporal_dfb(input1)
-        if not self.normalize_kernels:
-            block1 = keras.layers.BatchNormalization(axis=-1)(block1)
         block1 = keras.layers.DepthwiseConv2D((channels, 1),
                                               use_bias=False,
                                               depth_multiplier=self.d,
                                               depthwise_constraint=keras.constraints.max_norm(1.))(block1)
-        block1 = keras.layers.Activation('relu')(block1)
+        block1 = keras.layers.BatchNormalization(axis=-1)(block1)
+        block1 = keras.layers.Activation(self.activation)(block1)
         block1 = keras.layers.AveragePooling2D((1, 2 * 4))(block1)
         block1 = keras.layers.Dropout(self.dropout_rate)(block1)
 
-        if self.normalize_kernels:
-            norm = keras.constraints.UnitNorm(axis=(0, 1, 2))
-            block2 = keras.layers.SeparableConv2D(self.f2,
-                                                  (1, 2 * 16),
-                                                  use_bias=False,
-                                                  padding='same',
-                                                  kernel_constraint=norm)(block1)
-        else:
-            block2 = keras.layers.SeparableConv2D(self.f2,
-                                                  (1, 2 * 16),
-                                                  use_bias=False,
-                                                  padding='same')(block1)
-            block2 = keras.layers.BatchNormalization(axis=-1)(block2)
-        block2 = keras.layers.Activation('relu')(block2)
+        block2 = keras.layers.SeparableConv2D(self.f2,
+                                              (1, 2 * 16),
+                                              use_bias=False,
+                                              padding='same')(block1)
+        block2 = keras.layers.BatchNormalization(axis=-1)(block2)
+        block2 = keras.layers.Activation(self.activation)(block2)
         block2 = keras.layers.AveragePooling2D((1, 2 * 8))(block2)
         if self.attention is None:
             block2 = keras.layers.Dropout(self.dropout_rate)(block2)
@@ -1180,7 +1173,7 @@ class DeepEEGAbstractor(BaseModel):
         branch_b = self._conv1d(input_tensor=branch_b,
                                 filters=n_units,
                                 kernel_size=6,
-                                dilation_rate=2,
+                                dilation_rate=1,
                                 strides=strides)
 
         branch_c = self._conv1d(input_tensor=input_tensor,
@@ -1191,7 +1184,7 @@ class DeepEEGAbstractor(BaseModel):
         branch_c = self._conv1d(input_tensor=branch_c,
                                 filters=n_units,
                                 kernel_size=6,
-                                dilation_rate=4,
+                                dilation_rate=1,
                                 strides=strides)
 
         output = keras.layers.concatenate([branch_a, branch_b, branch_c], axis=-1)
