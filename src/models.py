@@ -335,12 +335,15 @@ class ModifiedEEGNet(BaseModel):
         if self.attention is None:
             block2 = keras.layers.Dropout(self.dropout_rate)(block2)
             block2 = keras.layers.Flatten(name='flatten')(block2)
-        elif self.attention == 'v1':
-            block2 = TemporalAttention()(block2)
-        elif self.attention == 'v2':
-            block2 = TemporalAttentionV2()(block2)
         else:
-            block2 = TemporalAttentionV3()(block2)
+            shape = keras.backend.int_shape(block2)
+            block2 = keras.layers.Reshape(target_shape=(shape[1], keras.backend.prod(shape[2:])))(block2)
+            if self.attention == 'v1':
+                block2 = TemporalAttention()(block2)
+            elif self.attention == 'v2':
+                block2 = TemporalAttentionV2()(block2)
+            else:
+                block2 = TemporalAttentionV3()(block2)
 
         dense = keras.layers.Dense(1,
                                    name='dense',
@@ -355,7 +358,7 @@ class ModifiedEEGNet(BaseModel):
 
     def _temporal_wfb(self, input_tensor):
         branch_a = self._temporal_conv1d(input_tensor=input_tensor,
-                                         n_units=self.f1,
+                                         n_units=int(self.f1 / 2),
                                          kernel_length=int(2 * self.kernel_length),
                                          dilation_rate=1)
         branch_b = self._temporal_conv1d(input_tensor=input_tensor,
@@ -375,7 +378,7 @@ class ModifiedEEGNet(BaseModel):
 
     def _temporal_dfb(self, input_tensor):
         branch_a = self._temporal_conv1d(input_tensor=input_tensor,
-                                         n_units=self.f1,
+                                         n_units=int(self.f1 / 2),
                                          kernel_length=int(2 * self.kernel_length / 8),
                                          dilation_rate=1)
         branch_b = self._temporal_conv1d(input_tensor=input_tensor,
@@ -1072,14 +1075,14 @@ class DeepEEGAbstractor(BaseModel):
             The design is based on DWT, i.e. each layer consists of dilated filters that extract features in different
              frequencies and different contexts.
 
-            Receptive field of each unit before GAP layer is 481 time-steps, about 2 seconds with sampling rate of 256, i.e.
-             each unit looks at 2 seconds of input multi-variate time-series.
+            Receptive field of each unit before GAP layer is 833 time-steps, about 3 seconds with sampling rate of 256, i.e.
+             each unit looks at 3 seconds of input multi-variate time-series.
         """
 
     def __init__(self,
                  input_shape,
-                 model_name='ST-DFB-CNN',
-                 n_kernels=(6, 6, 4, 4, 4),
+                 model_name='D-EEG-A',
+                 n_kernels=(6, 6, 6, 4),
                  spatial_dropout_rate=0.1,
                  dropout_rate=0.3,
                  use_bias=False,
@@ -1130,12 +1133,6 @@ class DeepEEGAbstractor(BaseModel):
         x = keras.layers.AveragePooling1D(pool_size=self.pool_size,
                                           strides=self.pool_stride)(x)
 
-        # Block 5
-        x = keras.layers.Dropout(self.dropout_rate)(x)
-        x = self._eeg_filter_bank(input_tensor=x,
-                                  n_units=self.n_kernels[4],
-                                  strides=1)
-
         # Temporal abstraction
         if self.attention is None:
             x = keras.layers.GlobalAveragePooling1D()(x)
@@ -1167,24 +1164,14 @@ class DeepEEGAbstractor(BaseModel):
 
         branch_b = self._conv1d(input_tensor=input_tensor,
                                 filters=n_units,
-                                kernel_size=6,
-                                dilation_rate=2,
-                                strides=strides)
-        branch_b = self._conv1d(input_tensor=branch_b,
-                                filters=n_units,
-                                kernel_size=6,
-                                dilation_rate=1,
+                                kernel_size=8,
+                                dilation_rate=4,
                                 strides=strides)
 
         branch_c = self._conv1d(input_tensor=input_tensor,
                                 filters=n_units,
-                                kernel_size=6,
-                                dilation_rate=4,
-                                strides=strides)
-        branch_c = self._conv1d(input_tensor=branch_c,
-                                filters=n_units,
-                                kernel_size=6,
-                                dilation_rate=1,
+                                kernel_size=8,
+                                dilation_rate=8,
                                 strides=strides)
 
         output = keras.layers.concatenate([branch_a, branch_b, branch_c], axis=-1)
@@ -1203,7 +1190,6 @@ class DeepEEGAbstractor(BaseModel):
                                   kernel_constraint=norm)(input_tensor)
         out = keras.layers.ELU()(out)
         return out
-
 
 
 class TemporalInceptionResnet(BaseModel):
