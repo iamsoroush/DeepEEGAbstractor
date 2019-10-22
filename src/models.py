@@ -336,8 +336,10 @@ class ModifiedEEGNet(BaseModel):
             block2 = keras.layers.Dropout(self.dropout_rate)(block2)
             block2 = keras.layers.Flatten(name='flatten')(block2)
         else:
-            shape = block2.shape
-            block2 = keras.layers.Reshape(target_shape=(shape[1], keras.backend.prod(shape[2:])))(block2)
+            shape = keras.backend.int_shape(block2)
+            block2 = keras.layers.Lambda(keras.backend.reshape,
+                                         arguments={'shape': (-1, shape[1], keras.backend.prod(shape[2:]))})(block2)
+            # block2 = keras.layers.Reshape(target_shape=(shape[1], keras.backend.prod(shape[2:])))(block2)
             if self.attention == 'v1':
                 block2 = TemporalAttention()(block2)
             elif self.attention == 'v2':
