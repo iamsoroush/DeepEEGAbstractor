@@ -288,7 +288,8 @@ class ModifiedEEGNet(BaseModel):
                  init_layer_type='wfb',
                  normalize_kernels=False,
                  attention=None,
-                 activation='relu'):
+                 activation='relu',
+                 normalization='batch'):
         super().__init__(input_shape, model_name)
         self.dropout_rate = dropout_rate
         self.kernel_length = kernel_length
@@ -301,6 +302,7 @@ class ModifiedEEGNet(BaseModel):
         self.normalize_kernels = normalize_kernels
         self.attention = attention
         self.activation = activation
+        self.normalization = normalization
         if keras.backend.image_data_format() != 'channels_last':
             keras.backend.set_image_data_format('channels_last')
 
@@ -320,7 +322,10 @@ class ModifiedEEGNet(BaseModel):
                                               use_bias=False,
                                               depth_multiplier=self.d,
                                               depthwise_constraint=keras.constraints.max_norm(1.))(block1)
-        block1 = keras.layers.BatchNormalization(axis=-1)(block1)
+        if self.normalization is 'batch':
+            block1 = keras.layers.BatchNormalization(axis=-1)(block1)
+        else:
+            block1 = InstanceNorm(axis=-1, mean=0.5, stddev=0.5)(block1)
         block1 = keras.layers.Activation(self.activation)(block1)
         block1 = keras.layers.AveragePooling2D((1, 2 * 4))(block1)
         block1 = keras.layers.Dropout(self.dropout_rate)(block1)
@@ -329,7 +334,10 @@ class ModifiedEEGNet(BaseModel):
                                               (1, 2 * 16),
                                               use_bias=False,
                                               padding='same')(block1)
-        block2 = keras.layers.BatchNormalization(axis=-1)(block2)
+        if self.normalization is 'batch':
+            block2 = keras.layers.BatchNormalization(axis=-1)(block2)
+        else:
+            block2 = InstanceNorm(axis=-1, mean=0.5, stddev=0.5)(block2)
         block2 = keras.layers.Activation(self.activation)(block2)
         block2 = keras.layers.AveragePooling2D((1, 2 * 8))(block2)
         if self.attention is None:
@@ -740,42 +748,33 @@ class TemporalDFB(BaseModel):
     def __init__(self,
                  input_shape,
                  model_name='T-DFB-CNN',
-                 dfb_kernel_length=16,
+                 dfb_kernel_length=32,
                  dfb_kernel_units=4,
-                 dfb_kernel_strides=1,
                  spatial_dropout_rate=0.1,
-                 pool_size=2,
-                 pool_strides=2,
-                 channel_wise_layer_kernel_length=4,
-                 channel_wise_layer_n_kernel=1,
-                 channel_wise_layer_strides=1,
+                 pool_size=4,
+                 pool_strides=4,
+                 channel_wise_layer_kernel_length=1,
+                 channel_wise_layer_n_kernel=2,
                  dropout_rate=0.2,
                  st_1_kernel_length=8,
                  st_1_n_kernel=10,
-                 st_1_strides=1,
-                 st_2_kernel_length=8,
-                 st_2_n_kernel=10,
-                 st_2_strides=1,
                  use_bias=False,
-                 normalize_kernels=False,
+                 normalize_kernels=True,
                  attention=None):
         super().__init__(input_shape, model_name)
         self.dfb_kernel_length = dfb_kernel_length
         self.dfb_kernel_units = dfb_kernel_units
-        self.dfb_kernel_strides = dfb_kernel_strides
+        self.dfb_kernel_strides = 1
         self.spatial_dropout_rate = spatial_dropout_rate
         self.pool_size = pool_size
         self.pool_strides = pool_strides
         self.channel_wise_layer_kernel_length = channel_wise_layer_kernel_length
         self.channel_wise_layer_n_kernel = channel_wise_layer_n_kernel
-        self.channel_wise_layer_strides = channel_wise_layer_strides
+        self.channel_wise_layer_strides = 1
         self.dropout_rate = dropout_rate
         self.st_1_kernel_length = st_1_kernel_length
         self.st_1_n_kernel = st_1_n_kernel
-        self.st_1_strides = st_1_strides
-        self.st_2_kernel_length = st_2_kernel_length
-        self.st_2_n_kernel = st_2_n_kernel
-        self.st_2_strides = st_2_strides
+        self.st_1_strides = 1
         self.use_bias = use_bias
         self.normalized_kernels = normalize_kernels
         self.attention = attention
@@ -810,20 +809,11 @@ class TemporalDFB(BaseModel):
                                                 strides=self.pool_strides)(block_2)
 
         # Block 3: Spatio-temporal mixing of channels
-        block_3 = keras.layers.SpatialDropout1D(self.spatial_dropout_rate)(block_2)
+        block_3 = keras.layers.Dropout(self.spatial_dropout_rate)(block_2)
         block_3 = self._st_conv1d(input_tensor=block_3,
                                   n_units=self.st_1_n_kernel,
                                   kernel_length=self.st_1_kernel_length,
                                   strides=self.st_1_strides)
-        # block_3 = keras.layers.AveragePooling1D(pool_size=self.pool_size,
-        #                                         strides=self.pool_strides)(block_3)
-        #
-        # # Block 4
-        # block_4 = keras.layers.Dropout(self.dropout_rate)(block_3)
-        # block_4 = self._st_conv1d(input_tensor=block_4,
-        #                           n_units=self.st_2_n_kernel,
-        #                           kernel_length=self.st_2_kernel_length,
-        #                           strides=self.st_2_strides)
 
         # Temporal abstraction
         if self.attention is None:
@@ -845,7 +835,7 @@ class TemporalDFB(BaseModel):
 
     def _temporal_dilated_filter_bank(self, input_tensor, n_units, strides):
         branch_a = self._temporal_conv1d(input_tensor=input_tensor,
-                                         n_units=n_units * 2,
+                                         n_units=n_units,
                                          kernel_length=self.dfb_kernel_length,
                                          strides=strides,
                                          dilation_rate=1)
