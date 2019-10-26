@@ -1117,21 +1117,14 @@ class DeepEEGAbstractor(BaseModel):
         x = keras.layers.AveragePooling1D(pool_size=self.pool_size,
                                           strides=self.pool_stride)(x)
 
-        # Block 3
-        x = keras.layers.Dropout(self.dropout_rate)(x)
-        x = self._eeg_filter_bank(input_tensor=x,
-                                  n_units=self.n_kernels[2],
-                                  strides=1)
-        x = keras.layers.AveragePooling1D(pool_size=self.pool_size,
-                                          strides=self.pool_stride)(x)
-
-        # Block 4
-        x = keras.layers.Dropout(self.dropout_rate)(x)
-        x = self._eeg_filter_bank(input_tensor=x,
-                                  n_units=self.n_kernels[3],
-                                  strides=1)
-        x = keras.layers.AveragePooling1D(pool_size=self.pool_size,
-                                          strides=self.pool_stride)(x)
+        # Block 3 - n
+        for n_units in self.n_kernels[2:]:
+            x = keras.layers.Dropout(self.dropout_rate)(x)
+            x = self._eeg_filter_bank(input_tensor=x,
+                                      n_units=n_units,
+                                      strides=1)
+            x = keras.layers.AveragePooling1D(pool_size=self.pool_size,
+                                              strides=self.pool_stride)(x)
 
         # Temporal abstraction
         if self.attention is None:
