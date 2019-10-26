@@ -1078,7 +1078,9 @@ class DeepEEGAbstractor(BaseModel):
                  spatial_dropout_rate=0.1,
                  dropout_rate=0.3,
                  use_bias=False,
-                 attention=None):
+                 attention=None,
+                 normalization=None,
+                 input_dropout=False):
         super().__init__(input_shape, model_name)
         self.n_kernels = n_kernels
         self.pool_size = 2
@@ -1087,6 +1089,8 @@ class DeepEEGAbstractor(BaseModel):
         self.dropout_rate = dropout_rate
         self.use_bias = use_bias
         self.attention = attention
+        self.normalization = normalization
+        self.input_dropout = input_dropout
         if keras.backend.image_data_format() != 'channels_last':
             keras.backend.set_image_data_format('channels_last')
 
@@ -1095,9 +1099,15 @@ class DeepEEGAbstractor(BaseModel):
                                           name='input_tensor')
 
         # Block 1
-        x = self._eeg_filter_bank(input_tensor=input_tensor,
-                                  n_units=self.n_kernels[0],
-                                  strides=1)
+        if self.input_dropout:
+            x = keras.layers.SpatialDropout1D(0.1)(input_tensor)
+            x = self._eeg_filter_bank(input_tensor=x,
+                                      n_units=self.n_kernels[0],
+                                      strides=1)
+        else:
+            x = self._eeg_filter_bank(input_tensor=input_tensor,
+                                      n_units=self.n_kernels[0],
+                                      strides=1)
         x = keras.layers.AveragePooling1D(pool_size=self.pool_size,
                                           strides=self.pool_stride)(x)
 
@@ -1180,6 +1190,10 @@ class DeepEEGAbstractor(BaseModel):
                                   activation=None,
                                   use_bias=self.use_bias,
                                   kernel_constraint=norm)(input_tensor)
+        if self.normalization == 'batch':
+            out = keras.layers.BatchNormalization(axis=-1)(out)
+        elif self.normalization == 'instance':
+            out = InstanceNorm(axis=-1, mean=0, stddev=1)(out)
         out = keras.layers.ELU()(out)
         return out
 
