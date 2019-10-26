@@ -18,9 +18,7 @@ Available models:
 
 import os
 
-import numpy as np
 import matplotlib.pyplot as plt
-from sklearn.manifold import TSNE
 
 from .custom_layers import InstanceNorm, TemporalAttention, TemporalAttentionV2, TemporalAttentionV3
 
@@ -1068,7 +1066,7 @@ class DeepEEGAbstractor(BaseModel):
              frequencies and different contexts.
 
             Receptive field of each unit before GAP layer is 833 time-steps, about 3 seconds with sampling rate of 256, i.e.
-             each unit looks at 3 seconds of input multi-variate time-series.
+             each unit before time abstraction layer looks at 3 seconds of input multi-variate time-series.
         """
 
     def __init__(self,
