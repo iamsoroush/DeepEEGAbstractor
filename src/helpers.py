@@ -11,6 +11,16 @@ from sklearn.metrics import roc_curve, auc, confusion_matrix, f1_score, mean_squ
 import matplotlib.pyplot as plt
 plt.style.use('seaborn-darkgrid')
 
+import tensorflow as tf
+
+tf_version = tf.__version__
+print('tensorflow version: ', tf_version)
+
+if tf.__version__.startswith('2'):
+    from tensorflow import keras
+else:
+    import keras
+
 
 class CrossValidator:
 
@@ -301,13 +311,15 @@ class CrossValidator:
                                                                       labels=labels,
                                                                       indxs=test_ind)
 
+        es_callback = keras.callbacks.EarlyStopping(monitor='binary_accuracy', min_delta=0.02, patience=3)
         model = model_obj.create_model()
         model.compile(loss=loss, optimizer=optimizer, metrics=metrics)
 
         model.fit_generator(generator=train_gen,
                             steps_per_epoch=n_iter_train,
                             epochs=self.epochs,
-                            verbose=False)
+                            verbose=False,
+                            callbacks=[es_callback])
 
         scores = [list() for _ in range(3)]
         x_test = list()
