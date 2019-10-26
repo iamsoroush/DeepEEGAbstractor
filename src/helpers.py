@@ -311,7 +311,7 @@ class CrossValidator:
                                                                       labels=labels,
                                                                       indxs=test_ind)
 
-        es_callback = keras.callbacks.EarlyStopping(monitor='binary_accuracy', min_delta=0.02, patience=3)
+        es_callback = keras.callbacks.EarlyStopping(monitor='binary_accuracy', min_delta=0.005, patience=3)
         model = model_obj.create_model()
         model.compile(loss=loss, optimizer=optimizer, metrics=metrics)
 
