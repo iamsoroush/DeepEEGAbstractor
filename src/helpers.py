@@ -292,7 +292,7 @@ class CrossValidator:
         """
         loss = model_obj.loss
         optimizer = model_obj.optimizer
-        metrics = model_obj.metrics
+        # metrics = model_obj.metrics
 
         if self.data_mode == 'cross_subject':
             train_data = [data[j] for j in train_ind]
@@ -311,9 +311,9 @@ class CrossValidator:
                                                                       labels=labels,
                                                                       indxs=test_ind)
 
-        es_callback = keras.callbacks.EarlyStopping(monitor='binary_accuracy', min_delta=0.001, patience=5)
+        es_callback = keras.callbacks.EarlyStopping(monitor='loss', min_delta=0.005, patience=5)
         model = model_obj.create_model()
-        model.compile(loss=loss, optimizer=optimizer, metrics=metrics)
+        model.compile(loss=loss, optimizer=optimizer)
 
         model.fit_generator(generator=train_gen,
                             steps_per_epoch=n_iter_train,
