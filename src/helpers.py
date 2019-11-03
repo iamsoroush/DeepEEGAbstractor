@@ -509,7 +509,11 @@ class StatisticalTester:
         if not scores_paths:
             print('Can not find any score file.')
             return
-        comb = combinations(scores_paths, 2)
+        l = [i for i in scores_paths if i.split('/')[-1].startswith('Deep-EEG-Abstractor-10time')]
+        if len(l) > 0:
+            comb = [(l[0], i) for i in scores_paths if i != l[0]]
+        else:
+            comb = combinations(scores_paths, 2)
         for res1_path, res2_path in comb:
             self._ttest(res1_path, res2_path)
             self._ttest(res2_path, res1_path)
