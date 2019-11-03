@@ -4,14 +4,18 @@
 
 import os
 import pickle
+from itertools import combinations
 
 import numpy as np
 from sklearn.model_selection import StratifiedKFold
 from sklearn.metrics import roc_curve, auc, confusion_matrix, f1_score, mean_squared_error
+from scipy.stats import ttest_1samp
 import matplotlib.pyplot as plt
-plt.style.use('seaborn-darkgrid')
 
 import tensorflow as tf
+
+plt.style.use('seaborn-darkgrid')
+
 
 tf_version = tf.__version__
 print('tensorflow version: ', tf_version)
@@ -493,6 +497,101 @@ def plot_scores(scores,
     fig.savefig(path_to_save)
 
 
-def t_paired_test():
+class StatisticalTester:
+
+    def __init__(self, alpha=0.05):
+        self.alpha = alpha
+
+    def do_t_test(self, res_dir):
+        assert os.path.exists(res_dir), "specified directory can not found."
+        scores_paths = [os.path.join(res_dir, p) for p in os.listdir(res_dir) if
+                        p.endswith('.npy') and (not p.startswith('train_test_indices'))]
+        if not scores_paths:
+            print('Can not find any score file.')
+            return
+        comb = combinations(scores_paths, 2)
+        for res1_path, res2_path in comb:
+            self._ttest(res1_path, res2_path)
+            self._ttest(res2_path, res1_path)
+
+    def _ttest(self, res1_path, res2_path):
+        """Does a less-than test, i.e. tests the null hypothesis of res1_path's
+         measure is equal or less than the res2's, versus the alternative hypothesis
+         of "res1_path's measure is higher than res2_path's".
+        """
+        fn1 = res1_path.split('/')[-1]
+        fn2 = res2_path.split('/')[-1]
+        print("H0: metric's value for {} is equal or lower than of {}".format(fn1, fn2))
+        acc_diff, fscore_diff, l_diff = self._get_diffs_mode1(res1_path, res2_path)
+
+        t_stat, p_val = ttest_1samp(acc_diff, 0)
+        print('Accuracies:')
+        print(' Rejection: ', (p_val / 2 < self.alpha) and (t_stat > 0))
+        print(' P-value: ', p_val)
+
+        t_stat, p_val = ttest_1samp(fscore_diff, 0)
+        print('F1-scores:')
+        print(' Rejection: ', (p_val / 2 < self.alpha) and (t_stat > 0))
+        print(' P-value: ', p_val)
+
+        t_stat, p_val = ttest_1samp(l_diff, 0)
+        print('Losses:')
+        print(' Rejection: ', (p_val / 2 < self.alpha) and (t_stat > 0))
+        print(' P-value: ', p_val)
+
+        acc_diff, fscore_diff = self._get_diffs_mode2(res1_path, res2_path)
+
+        t_stat, p_val = ttest_1samp(acc_diff, 0)
+        print('Accuracies (SW):')
+        print(' Rejection: ', (p_val / 2 < self.alpha) and (t_stat > 0))
+        print(' P-value: ', p_val)
+
+        t_stat, p_val = ttest_1samp(fscore_diff, 0)
+        print('F1-scores (SW):')
+        print(' Rejection: ', (p_val / 2 < self.alpha) and (t_stat > 0))
+        print(' P-value: ', p_val)
+
+    @staticmethod
+    def _get_diffs_mode1(res1_path, res2_path):
+        res1 = np.load(res1_path, allow_pickle=True)[:, 0]
+        res2 = np.load(res2_path, allow_pickle=True)[:, 0]
+
+        l_diff = np.zeros(100)
+        acc_diff = np.zeros(100)
+        fscore_diff = np.zeros(100)
+        for i in range(100):
+            l1, acc1, fscore_1 = res1[i][:3]
+            l2, acc2, fscore_2 = res2[i][:3]
+            l_diff[i] = l1 - l2
+            acc_diff[i] = acc1 - acc2
+            fscore_diff[i] = fscore_1 - fscore_2
+        return acc_diff, fscore_diff, l_diff
+
+    def _get_diffs_mode2(self, res1_path, res2_path):
+        res1 = np.load(res1_path, allow_pickle=True)[:, 1]
+        res2 = np.load(res2_path, allow_pickle=True)[:, 1]
+
+        acc_diff = np.zeros(100)
+        fscore_diff = np.zeros(100)
+        for i in range(100):
+            acc1, fscore1 = self._get_subject_wise_scores(res1[i])
+            acc2, fscore2 = self._get_subject_wise_scores(res2[i])
+
+            acc_diff[i] = acc1 - acc2
+            fscore_diff[i] = fscore1 - fscore2
+        return acc_diff, fscore_diff
+
+    @staticmethod
+    def _get_subject_wise_scores(res):
+        tns, fps, fns, tps = res
+        acc_vector = (tps + tns) / (tps + fns + fps + tns)
+        prec_vector = tps / (tps + fps + 0.0001)
+        rec_vector = tps / (tps + fns + 0.0001)
+        spec_vector = tns / (tns + fps + 0.0001)
+        fscore_vector = 2 * (prec_vector * rec_vector) / (prec_vector + rec_vector + 0.0001)
+        return acc_vector, fscore_vector
+
+
+def t_test():
     # TODO: define this function
     pass
