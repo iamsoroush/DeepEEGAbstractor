@@ -516,7 +516,7 @@ class StatisticalTester:
                 return
             comb = [(l[0], i) for i in scores_paths if i != l[0]]
             for res1_path, res2_path in comb:
-                self._ttest(res1_path, res2_path)
+                self._ttest(res2_path, res1_path)
         else:
             comb = combinations(scores_paths, 2)
             for res1_path, res2_path in comb:
