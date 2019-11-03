@@ -502,21 +502,26 @@ class StatisticalTester:
     def __init__(self, alpha=0.05):
         self.alpha = alpha
 
-    def do_t_test(self, res_dir):
-        assert os.path.exists(res_dir), "specified directory can not found."
+    def do_t_test(self, res_dir, reference_file=None):
+        assert os.path.exists(res_dir), "specified directory not found."
         scores_paths = [os.path.join(res_dir, p) for p in os.listdir(res_dir) if
                         p.endswith('.npy') and (not p.startswith('train_test_indices'))]
         if not scores_paths:
             print('Can not find any score file.')
             return
-        l = [i for i in scores_paths if i.split('/')[-1].startswith('Deep-EEG-Abstractor-10time')]
-        if len(l) > 0:
+        if reference_file is not None:
+            l = [i for i in scores_paths if i.split('/')[-1] == reference_file]
+            if not l:
+                print('reference file not found.')
+                return
             comb = [(l[0], i) for i in scores_paths if i != l[0]]
+            for res1_path, res2_path in comb:
+                self._ttest(res1_path, res2_path)
         else:
             comb = combinations(scores_paths, 2)
-        for res1_path, res2_path in comb:
-            self._ttest(res1_path, res2_path)
-            self._ttest(res2_path, res1_path)
+            for res1_path, res2_path in comb:
+                self._ttest(res1_path, res2_path)
+                self._ttest(res2_path, res1_path)
 
     def _ttest(self, res1_path, res2_path):
         """Does a less-than test, i.e. tests the null hypothesis of res1_path's
