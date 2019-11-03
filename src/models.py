@@ -1076,6 +1076,7 @@ class DeepEEGAbstractor(BaseModel):
                  spatial_dropout_rate=0.1,
                  dropout_rate=0.3,
                  use_bias=False,
+                 weight_norm=True,
                  attention=None,
                  normalization=None,
                  input_dropout=False):
@@ -1086,6 +1087,7 @@ class DeepEEGAbstractor(BaseModel):
         self.spatial_dropout_rate = spatial_dropout_rate
         self.dropout_rate = dropout_rate
         self.use_bias = use_bias
+        self.weight_norm = weight_norm
         self.attention = attention
         self.normalization = normalization
         self.input_dropout = input_dropout
@@ -1171,7 +1173,10 @@ class DeepEEGAbstractor(BaseModel):
         return output
 
     def _conv1d(self, input_tensor, filters, kernel_size, dilation_rate, strides):
-        norm = keras.constraints.UnitNorm(axis=(0, 1))
+        if self.weight_norm:
+            norm = keras.constraints.UnitNorm(axis=(0, 1))
+        else:
+            norm = None
         out = keras.layers.Conv1D(filters=filters,
                                   kernel_size=kernel_size,
                                   strides=strides,
@@ -1189,108 +1194,108 @@ class DeepEEGAbstractor(BaseModel):
         return out
 
 
-class TemporalInceptionResnet(BaseModel):
-
-    # TODO: add pruning
-
-    def __init__(self,
-                 input_shape,
-                 model_name='deega-gap',
-                 lightweight=False,
-                 units=(10, 8, 6),
-                 dropout_rate=0.1,
-                 pool_size=2,
-                 use_bias=True,
-                 dilation_rate=4,
-                 kernel_size=8,
-                 activation='elu'):
-        super().__init__(input_shape, model_name)
-        self.lightweight = lightweight
-        self.units = units
-        self.dropout_rate = dropout_rate
-        self.pool_size = pool_size
-        self.use_bias = use_bias
-        self.dilation_rate = dilation_rate
-        self.kernel_size = kernel_size
-        self.activation = activation
-        if keras.backend.image_data_format() != 'channels_last':
-            keras.backend.set_image_data_format('channels_last')
-
-    def create_model(self):
-        input_tensor = keras.layers.Input(shape=self.input_shape_,
-                                          name='input_tensor')
-
-        # Block 1
-        x = keras.layers.SpatialDropout1D(self.dropout_rate)(input_tensor)
-        y = self._dilated_inception(x,
-                                    n_units=self.units[0])
-        if not self.lightweight:
-            y = self._dilated_inception(y,
-                                        n_units=self.units[0])
-        x = self._add_skip_connection(x, y)
-        x = keras.layers.AveragePooling1D(pool_size=self.pool_size,
-                                          strides=self.pool_size)(x)
-
-        # Block 2 - n
-        for n_units in self.units[1:]:
-            x = keras.layers.SpatialDropout1D(self.dropout_rate)(x)
-            y = self._dilated_inception(x,
-                                        n_units=n_units)
-            if not self.lightweight:
-                y = self._dilated_inception(y,
-                                            n_units=n_units)
-            x = self._add_skip_connection(x, y)
-            x = keras.layers.AveragePooling1D(pool_size=self.pool_size)(x)
-
-        x = keras.layers.GlobalAveragePooling1D()(x)
-
-        # Logistic regression unit
-        output_tensor = keras.layers.Dense(1, activation='sigmoid', name='output')(x)
-
-        model = keras.Model(input_tensor, output_tensor)
-        self.model_ = model
-
-        return model
-
-    def _dilated_inception(self, input_tensor, n_units):
-        branch_a = self._causal_conv1d(input_tensor, n_units, self.kernel_size, 1)
-
-        branch_b = self._causal_conv1d(input_tensor, n_units, self.kernel_size, 1)
-        branch_b = self._causal_conv1d(branch_b, n_units, self.kernel_size, self.dilation_rate)
-
-        branch_c = self._causal_conv1d(input_tensor, n_units, 1, 1)
-
-        output = keras.layers.concatenate([branch_a, branch_b, branch_c], axis=-1)
-        return output
-
-    def _add_skip_connection(self, input_tensor, output_tensor, scale=1.0):
-        channels = keras.backend.int_shape(output_tensor)[-1]
-
-        shortcut_branch = self._causal_conv1d(input_tensor, channels, 1)
-        out = self._weighted_add(shortcut_branch, output_tensor, scale)
-        return keras.layers.ELU()(out)
-
-    @staticmethod
-    def _weighted_add(shortcut_branch, inception_branch, scale_factor):
-        return keras.layers.Lambda(lambda inputs, scale: inputs[0] + inputs[1] * scale,
-                                   arguments={'scale': scale_factor})([shortcut_branch, inception_branch])
-
-    def _causal_conv1d(self, x, filters, kernel_size, dilation_rate=1):
-        out = keras.layers.Conv1D(filters=filters,
-                                  kernel_size=kernel_size,
-                                  strides=1,
-                                  padding='same',
-                                  data_format='channels_last',
-                                  dilation_rate=dilation_rate,
-                                  activation=None,
-                                  use_bias=self.use_bias)(x)
-        if self.activation == 'elu':
-            out = InstanceNorm(mean=0, stddev=1.0)(out)
-            out = keras.layers.ELU()(out)
-        elif self.activation == 'relu':
-            out = InstanceNorm(mean=0.5, stddev=0.5)(out)
-            out = keras.layers.ReLU()(out)
-        return out
+# class TemporalInceptionResnet(BaseModel):
+#
+#     # TODO: add pruning
+#
+#     def __init__(self,
+#                  input_shape,
+#                  model_name='deega-gap',
+#                  lightweight=False,
+#                  units=(10, 8, 6),
+#                  dropout_rate=0.1,
+#                  pool_size=2,
+#                  use_bias=True,
+#                  dilation_rate=4,
+#                  kernel_size=8,
+#                  activation='elu'):
+#         super().__init__(input_shape, model_name)
+#         self.lightweight = lightweight
+#         self.units = units
+#         self.dropout_rate = dropout_rate
+#         self.pool_size = pool_size
+#         self.use_bias = use_bias
+#         self.dilation_rate = dilation_rate
+#         self.kernel_size = kernel_size
+#         self.activation = activation
+#         if keras.backend.image_data_format() != 'channels_last':
+#             keras.backend.set_image_data_format('channels_last')
+#
+#     def create_model(self):
+#         input_tensor = keras.layers.Input(shape=self.input_shape_,
+#                                           name='input_tensor')
+#
+#         # Block 1
+#         x = keras.layers.SpatialDropout1D(self.dropout_rate)(input_tensor)
+#         y = self._dilated_inception(x,
+#                                     n_units=self.units[0])
+#         if not self.lightweight:
+#             y = self._dilated_inception(y,
+#                                         n_units=self.units[0])
+#         x = self._add_skip_connection(x, y)
+#         x = keras.layers.AveragePooling1D(pool_size=self.pool_size,
+#                                           strides=self.pool_size)(x)
+#
+#         # Block 2 - n
+#         for n_units in self.units[1:]:
+#             x = keras.layers.SpatialDropout1D(self.dropout_rate)(x)
+#             y = self._dilated_inception(x,
+#                                         n_units=n_units)
+#             if not self.lightweight:
+#                 y = self._dilated_inception(y,
+#                                             n_units=n_units)
+#             x = self._add_skip_connection(x, y)
+#             x = keras.layers.AveragePooling1D(pool_size=self.pool_size)(x)
+#
+#         x = keras.layers.GlobalAveragePooling1D()(x)
+#
+#         # Logistic regression unit
+#         output_tensor = keras.layers.Dense(1, activation='sigmoid', name='output')(x)
+#
+#         model = keras.Model(input_tensor, output_tensor)
+#         self.model_ = model
+#
+#         return model
+#
+#     def _dilated_inception(self, input_tensor, n_units):
+#         branch_a = self._causal_conv1d(input_tensor, n_units, self.kernel_size, 1)
+#
+#         branch_b = self._causal_conv1d(input_tensor, n_units, self.kernel_size, 1)
+#         branch_b = self._causal_conv1d(branch_b, n_units, self.kernel_size, self.dilation_rate)
+#
+#         branch_c = self._causal_conv1d(input_tensor, n_units, 1, 1)
+#
+#         output = keras.layers.concatenate([branch_a, branch_b, branch_c], axis=-1)
+#         return output
+#
+#     def _add_skip_connection(self, input_tensor, output_tensor, scale=1.0):
+#         channels = keras.backend.int_shape(output_tensor)[-1]
+#
+#         shortcut_branch = self._causal_conv1d(input_tensor, channels, 1)
+#         out = self._weighted_add(shortcut_branch, output_tensor, scale)
+#         return keras.layers.ELU()(out)
+#
+#     @staticmethod
+#     def _weighted_add(shortcut_branch, inception_branch, scale_factor):
+#         return keras.layers.Lambda(lambda inputs, scale: inputs[0] + inputs[1] * scale,
+#                                    arguments={'scale': scale_factor})([shortcut_branch, inception_branch])
+#
+#     def _causal_conv1d(self, x, filters, kernel_size, dilation_rate=1):
+#         out = keras.layers.Conv1D(filters=filters,
+#                                   kernel_size=kernel_size,
+#                                   strides=1,
+#                                   padding='same',
+#                                   data_format='channels_last',
+#                                   dilation_rate=dilation_rate,
+#                                   activation=None,
+#                                   use_bias=self.use_bias)(x)
+#         if self.activation == 'elu':
+#             out = InstanceNorm(mean=0, stddev=1.0)(out)
+#             out = keras.layers.ELU()(out)
+#         elif self.activation == 'relu':
+#             out = InstanceNorm(mean=0.5, stddev=0.5)(out)
+#             out = keras.layers.ReLU()(out)
+#         return out
 
 # class DeepEEGAbstractor(BaseModel):
 #
