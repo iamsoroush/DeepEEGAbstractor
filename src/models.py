@@ -1079,7 +1079,8 @@ class DeepEEGAbstractor(BaseModel):
                  weight_norm=True,
                  attention=None,
                  normalization=None,
-                 input_dropout=False):
+                 input_dropout=False,
+                 activation='elu'):
         super().__init__(input_shape, model_name)
         self.n_kernels = n_kernels
         self.pool_size = 2
@@ -1091,6 +1092,7 @@ class DeepEEGAbstractor(BaseModel):
         self.attention = attention
         self.normalization = normalization
         self.input_dropout = input_dropout
+        self.activation = activation
         if keras.backend.image_data_format() != 'channels_last':
             keras.backend.set_image_data_format('channels_last')
 
@@ -1190,8 +1192,103 @@ class DeepEEGAbstractor(BaseModel):
             out = keras.layers.BatchNormalization(axis=-1)(out)
         elif self.normalization == 'instance':
             out = InstanceNorm(axis=-1, mean=0, stddev=1)(out)
-        out = keras.layers.ELU()(out)
+        out = keras.layers.Activation(self.activation)(out)
         return out
+
+
+class NotDilatedDEEGA:
+
+    def __init__(self,
+                 input_shape,
+                 model_name='D-EEG-A',
+                 n_kernels=(6, 6, 6, 4),
+                 spatial_dropout_rate=0.1,
+                 dropout_rate=0.3,
+                 use_bias=False,
+                 weight_norm=True,
+                 attention=None,
+                 normalization=None,
+                 input_dropout=False,
+                 activation='elu'):
+        super().__init__(input_shape, model_name)
+        self.n_kernels = n_kernels
+        self.pool_size = 2
+        self.pool_stride = 2
+        self.spatial_dropout_rate = spatial_dropout_rate
+        self.dropout_rate = dropout_rate
+        self.use_bias = use_bias
+        self.weight_norm = weight_norm
+        self.attention = attention
+        self.normalization = normalization
+        self.input_dropout = input_dropout
+        self.activation = activation
+        if keras.backend.image_data_format() != 'channels_last':
+            keras.backend.set_image_data_format('channels_last')
+
+    def create_model(self):
+        input_tensor = keras.layers.Input(shape=self.input_shape_,
+                                          name='input_tensor')
+
+        # Block 1
+        if self.input_dropout:
+            x = keras.layers.SpatialDropout1D(0.1)(input_tensor)
+            x = self._conv1d(x, self.n_kernels[0] * 4, 8, 1, 1)
+        else:
+            x = self._conv1d(x, self.n_kernels[0] * 4, 8, 1, 1)
+        x = keras.layers.AveragePooling1D(pool_size=self.pool_size,
+                                          strides=self.pool_stride)(x)
+
+        # Block 2
+        x = keras.layers.SpatialDropout1D(self.spatial_dropout_rate)(x)
+        x = self._conv1d(x, self.n_kernels[1] * 4, 8, 1, 1)
+        x = keras.layers.AveragePooling1D(pool_size=self.pool_size,
+                                          strides=self.pool_stride)(x)
+
+        # Block 3 - n
+        for n_units in self.n_kernels[2:]:
+            x = keras.layers.Dropout(self.dropout_rate)(x)
+            x = self._conv1d(x, n_units * 4, 8, 1, 1)
+            x = keras.layers.AveragePooling1D(pool_size=self.pool_size,
+                                              strides=self.pool_stride)(x)
+
+        # Temporal abstraction
+        if self.attention is None:
+            x = keras.layers.GlobalAveragePooling1D()(x)
+        elif self.attention == 'v1':
+            x = TemporalAttention()(x)
+        elif self.attention == 'v2':
+            x = TemporalAttentionV2()(x)
+        else:
+            x = TemporalAttentionV3()(x)
+
+        # Logistic regression unit
+        output_tensor = keras.layers.Dense(1, activation='sigmoid', name='output')(x)
+
+        model = keras.Model(input_tensor, output_tensor)
+        self.model_ = model
+        return model
+
+    def _conv1d(self, input_tensor, filters, kernel_size, dilation_rate, strides):
+        if self.weight_norm:
+            norm = keras.constraints.UnitNorm(axis=(0, 1))
+        else:
+            norm = None
+        out = keras.layers.Conv1D(filters=filters,
+                                  kernel_size=kernel_size,
+                                  strides=strides,
+                                  padding='same',
+                                  data_format='channels_last',
+                                  dilation_rate=dilation_rate,
+                                  activation=None,
+                                  use_bias=self.use_bias,
+                                  kernel_constraint=norm)(input_tensor)
+        if self.normalization == 'batch':
+            out = keras.layers.BatchNormalization(axis=-1)(out)
+        elif self.normalization == 'instance':
+            out = InstanceNorm(axis=-1, mean=0, stddev=1)(out)
+        out = keras.layers.Activation(self.activation)(out)
+        return out
+
 
 
 # class TemporalInceptionResnet(BaseModel):
