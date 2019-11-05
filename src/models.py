@@ -1196,7 +1196,7 @@ class DeepEEGAbstractor(BaseModel):
         return out
 
 
-class NotDilatedDEEGA:
+class NotDilatedDEEGA(BaseModel):
 
     def __init__(self,
                  input_shape,
