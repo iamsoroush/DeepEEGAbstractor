@@ -1234,7 +1234,7 @@ class NotDilatedDEEGA(BaseModel):
             x = keras.layers.SpatialDropout1D(0.1)(input_tensor)
             x = self._conv1d(x, self.n_kernels[0] * 4, 8, 1, 1)
         else:
-            x = self._conv1d(x, self.n_kernels[0] * 4, 8, 1, 1)
+            x = self._conv1d(input_tensor, self.n_kernels[0] * 4, 8, 1, 1)
         x = keras.layers.AveragePooling1D(pool_size=self.pool_size,
                                           strides=self.pool_stride)(x)
 
