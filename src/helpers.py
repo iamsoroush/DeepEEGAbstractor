@@ -530,7 +530,7 @@ class StatisticalTester:
         """
         fn1 = res1_path.split('/')[-1]
         fn2 = res2_path.split('/')[-1]
-        print("H0: metric's value for {} is equal or lower than of {}".format(fn1, fn2))
+        print("H0: x({}) <= x({})".format(fn1, fn2))
         acc_diff, fscore_diff, l_diff = self._get_diffs_mode1(res1_path, res2_path)
 
         t_stat, p_val = ttest_1samp(acc_diff, 0)
@@ -599,8 +599,3 @@ class StatisticalTester:
         spec_vector = tns / (tns + fps + 0.0001)
         fscore_vector = 2 * (prec_vector * rec_vector) / (prec_vector + rec_vector + 0.0001)
         return acc_vector, fscore_vector
-
-
-def t_test():
-    # TODO: define this function
-    pass
