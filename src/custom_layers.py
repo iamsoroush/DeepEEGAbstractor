@@ -3,11 +3,7 @@
 # Author: Soroush Moazed <soroush.moazed@gmail.com>
 
 
-import tensorflow as tf
-if tf.__version__.startswith('2'):
-    from tensorflow import keras
-else:
-    import keras
+from . import keras
 
 
 class TemporalAttention(keras.layers.Layer):

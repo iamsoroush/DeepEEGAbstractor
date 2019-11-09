@@ -8,11 +8,7 @@ import os
 from .helpers import f1_score, sensitivity, specificity
 from .custom_layers import InstanceNorm, TemporalAttention
 
-import tensorflow as tf
-if tf.__version__.startswith('2'):
-    from tensorflow import keras
-else:
-    import keras
+from . import keras
 
 
 class KerasModel:

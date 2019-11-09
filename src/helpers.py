@@ -12,7 +12,7 @@ from sklearn.metrics import roc_curve, auc, confusion_matrix, f1_score, mean_squ
 from scipy.stats import ttest_1samp
 import matplotlib.pyplot as plt
 
-import tensorflow as tf
+from . import tf
 
 plt.style.use('seaborn-darkgrid')
 
