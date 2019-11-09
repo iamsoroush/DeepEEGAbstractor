@@ -202,14 +202,19 @@ class FixedLenGenerator(Generator):
                  duration,
                  overlap,
                  sampling_rate,
-                 is_train):
+                 is_train,
+                 normalization='channel'):
         super().__init__(True,
                          is_train)
+        assert normalization in ('channel', 'instance', 'time'),\
+            "passed vale for normalization arg should be one of " \
+                                                                 "('channel', 'instance', 'time')"
         self.batch_size = batch_size
         self.duration = duration
         self.overlap = overlap
         self.sampling_rate = sampling_rate
         self.belonged_to_subject = list()
+        self.normalization = normalization
 
     def get_generator(self,
                       data,
@@ -258,12 +263,20 @@ class FixedLenGenerator(Generator):
         instances = list()
         for ind, (i, j) in enumerate(indices):
             instance = arr[i: j, :]
-            # instance = (instance - instance.mean()) / (instance.std() + 0.0001)
-            ch_wise_mean = instance.mean(axis=0, keepdims=True)
-            ch_wise_std = instance.std(axis=0, keepdims=True)
-            if np.any(ch_wise_std > 60) or np.any(ch_wise_std < 1):
-                continue
-            instance = (instance - ch_wise_mean) / ch_wise_std
+            if self.normalization == 'instance':
+                instance = (instance - instance.mean()) / (instance.std() + 0.0001)
+            elif self.normalization == 'channel':
+                ch_wise_mean = instance.mean(axis=0, keepdims=True)
+                ch_wise_std = instance.std(axis=0, keepdims=True)
+                if np.any(ch_wise_std > 60) or np.any(ch_wise_std < 1):
+                    continue
+                instance = (instance - ch_wise_mean) / ch_wise_std
+            else:
+                time_wise_mean = instance.mean(axis=1, keepdims=True)
+                time_wise_std = instance.std(axis=1, keepdims=True)
+                if np.any(time_wise_std > 100) or np.any(time_wise_std < 1):
+                    continue
+                instance = (instance - time_wise_mean) / (time_wise_std + 0.0001)
             instances.append(instance)
         return instances
 
@@ -297,10 +310,15 @@ class VarLenGenerator(Generator):
                  max_duration,
                  iter_per_group,
                  sampling_rate,
-                 is_train):
+                 is_train,
+                 normalization='channel'):
         # Note: Don't use this generator as test set generator yet.
         super().__init__(False,
                          is_train)
+        assert normalization in ('channel', 'instance', 'time'), \
+            "passed vale for normalization arg should be one of " \
+            "('channel', 'instance', 'time')"
+        self.normalization = normalization
         self.min_duration = min_duration
         self.max_duration = max_duration
         self.iter_per_group = iter_per_group
@@ -346,11 +364,27 @@ class VarLenGenerator(Generator):
             if end_ind > tsteps:
                 break
             sub_array = subject_data[cursor: end_ind, :]
-            ch_wise_mean = sub_array.mean(axis=0, keepdims=True)
-            ch_wise_std = sub_array.std(axis=0, keepdims=True)
-            if np.any(ch_wise_std > 80) or np.any(ch_wise_std < 1):
-                continue
-            sub_array = (sub_array - ch_wise_mean) / (ch_wise_std + 0.00001)
+
+            if self.normalization == 'instance':
+                sub_array = (sub_array - sub_array.mean()) / (sub_array.std() + 0.00001)
+            elif self.normalization == 'channel':
+                ch_wise_mean = sub_array.mean(axis=0, keepdims=True)
+                ch_wise_std = sub_array.std(axis=0, keepdims=True)
+                if np.any(ch_wise_std > 80) or np.any(ch_wise_std < 1):
+                    continue
+                sub_array = (sub_array - ch_wise_mean) / (ch_wise_std + 0.00001)
+            else:
+                time_wise_mean = sub_array.mean(axis=1, keepdims=True)
+                time_wise_std = sub_array.std(axis=1, keepdims=True)
+                if np.any(time_wise_std > 120) or np.any(time_wise_std < 1):
+                    continue
+                sub_array = (sub_array - time_wise_mean) / (time_wise_std + 0.00001)
+
+            # ch_wise_mean = sub_array.mean(axis=0, keepdims=True)
+            # ch_wise_std = sub_array.std(axis=0, keepdims=True)
+            # if np.any(ch_wise_std > 80) or np.any(ch_wise_std < 1):
+            #     continue
+            # sub_array = (sub_array - ch_wise_mean) / (ch_wise_std + 0.00001)
             s_dict[duration].append(sub_array)
             cursor = end_ind
         return s_dict
