@@ -517,6 +517,7 @@ class StatisticalTester:
             comb = [(l[0], i) for i in scores_paths if i != l[0]]
             for res1_path, res2_path in comb:
                 self._ttest(res2_path, res1_path)
+                self._ttest(res1_path, res2_path)
         else:
             comb = combinations(scores_paths, 2)
             for res1_path, res2_path in comb:
@@ -534,31 +535,41 @@ class StatisticalTester:
         acc_diff, fscore_diff, l_diff = self._get_diffs_mode1(res1_path, res2_path)
 
         t_stat, p_val = ttest_1samp(acc_diff, 0)
+        rejection = (p_val / 2 < self.alpha) and (t_stat > 0)
         print(' Accuracies:')
-        print('     Rejection: ', (p_val / 2 < self.alpha) and (t_stat > 0))
-        print('     P-value: ', p_val)
+        print('     Rejection: ', rejection)
+        if rejection:
+            print('     P-value: ', p_val)
 
         t_stat, p_val = ttest_1samp(fscore_diff, 0)
+        rejection = (p_val / 2 < self.alpha) and (t_stat > 0)
         print(' F1-scores:')
-        print('     Rejection: ', (p_val / 2 < self.alpha) and (t_stat > 0))
-        print('     P-value: ', p_val)
+        print('     Rejection: ', rejection)
+        if rejection:
+            print('     P-value: ', p_val)
 
         t_stat, p_val = ttest_1samp(l_diff, 0)
+        rejection = (p_val / 2 < self.alpha) and (t_stat > 0)
         print(' Losses:')
-        print('     Rejection: ', (p_val / 2 < self.alpha) and (t_stat > 0))
-        print('     P-value: ', p_val)
+        print('     Rejection: ', rejection)
+        if rejection:
+            print('     P-value: ', p_val)
 
         acc_diff, fscore_diff = self._get_diffs_mode2(res1_path, res2_path)
 
         t_stat, p_val = ttest_1samp(acc_diff, 0)
+        rejection = (p_val / 2 < self.alpha) and (t_stat > 0)
         print(' Accuracies (SW):')
-        print('     Rejection: ', (p_val / 2 < self.alpha) and (t_stat > 0))
-        print('     P-value: ', p_val)
+        print('     Rejection: ', rejection)
+        if rejection:
+            print('     P-value: ', p_val)
 
         t_stat, p_val = ttest_1samp(fscore_diff, 0)
+        rejection = (p_val / 2 < self.alpha) and (t_stat > 0)
         print(' F1-scores (SW):')
-        print('     Rejection: ', (p_val / 2 < self.alpha) and (t_stat > 0))
-        print('     P-value: ', p_val)
+        print('     Rejection: ', rejection)
+        if rejection:
+            print('     P-value: ', p_val)
 
     @staticmethod
     def _get_diffs_mode1(res1_path, res2_path):
