@@ -1,6 +1,10 @@
 # Deep EEG Abstractor (D-EEG-A)
 
-Do the following:
+In this project, I have proposed a method called DeepEEGAbstractor, which is a temporal-CNN-based neural network for classification of multi-variate time-series, e.g. EEG signals. With the help of a temporal attention mechanism, model can classify input signals of any length, without the need of making the incoming samples the same length as the training samples. Also, with the help of input channel-wise dropout, the model is robust against the loss of some input channels. And at the end, all the results can be re-produced using google colab, there is no cheat in the results.
+
+
+
+To reproduce the results, do the following:
 1. Create a copy from [*prepare_data*](https://github.com/iamsoroush/DeepEEGAbstractor/blob/master/prepare_data.ipynb) in your google drive.
 2. Run all cells within *Copy of prepare_data.ipynb* one-by-one.
 2. Create a copy from a *cv_....ipynb* file in your google drive.
