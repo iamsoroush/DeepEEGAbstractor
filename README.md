@@ -1,6 +1,6 @@
 # Deep EEG Abstractor (D-EEG-A)
 
-In this project, I have proposed a method called DeepEEGAbstractor, which is a temporal-CNN-based neural network for classification of multi-variate time-series, e.g. EEG signals. With the help of a temporal attention mechanism, model can classify input signals of any length, without the need of making the incoming samples the same length as the training samples. Also, with the help of input channel-wise dropout, the model is robust against the loss of some input channels. And at the end, all the results can be re-produced using google colab.
+In this project, we aim to predict whether a patient diagnosed with MDD (Major Depressive Disorder) will response to SSRI-based medications.  I have proposed a method called DeepEEGAbstractor, which is a temporal-CNN-based neural network for classification of multi-variate resting state EEG signals. First the input signal processed to obtain a set more abstract features by using 4 consecutive specially designed temporal convolution blocks. Then with the help of a temporal attention mechanism, model can classify input signals of any length, without the need of making the incoming samples the same length as the training samples. Also the input channel-wise dropout, makes the model robust against the loss of some input channels. And at the end, all the results can be re-produced using google colab.
 
 Here's the model's architecture:
 ![Alt text](https://github.com/iamsoroush/DeepEEG/blob/master/deep_eeg_arch.jpg)
