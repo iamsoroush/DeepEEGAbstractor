@@ -3,8 +3,7 @@
 In this project, I have proposed a method called DeepEEGAbstractor, which is a temporal-CNN-based neural network for classification of multi-variate time-series, e.g. EEG signals. With the help of a temporal attention mechanism, model can classify input signals of any length, without the need of making the incoming samples the same length as the training samples. Also, with the help of input channel-wise dropout, the model is robust against the loss of some input channels. And at the end, all the results can be re-produced using google colab.
 
 Here's the model's architecture:
-
-
+![Alt text](https://github.com/iamsoroush/DeepEEG/blob/master/deep_eeg_arch.jpg)
 
 
 To reproduce the results, do the following:
